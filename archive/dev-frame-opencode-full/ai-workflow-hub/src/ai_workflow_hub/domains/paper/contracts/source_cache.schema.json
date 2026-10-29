@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceCache",
+  "type": "object",
+  "required": ["schema_version", "created_at", "updated_at", "scan_count", "sources"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "scan_count": {"type": "integer", "minimum": 0},
+    "sources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["path", "checksum", "source_kind", "metadata_summary"],
+        "properties": {
+          "path": {"type": "string"},
+          "relative_path": {"type": "string"},
+          "checksum": {"type": "string"},
+          "source_kind": {"type": "string", "enum": ["obsidian", "bibtex"]},
+          "metadata_summary": {"type": "object"},
+          "added_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+{"transition": "bounded_guarded_review_pipeline_closed", "next": "claude_codex_interchangeable"}
+{"transition": "claude_codex_interchangeable_accepted", "next": "limited_broader_real_chain_execution"}
+{"transition": "limited_broader_real_chain_execution_achieved", "next": "runbook_hardening"}
+{"transition": "runbook_hardening_started", "next": "production_readiness"}

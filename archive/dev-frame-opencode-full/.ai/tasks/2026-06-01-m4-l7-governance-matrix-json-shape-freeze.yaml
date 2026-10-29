@@ -1,0 +1,67 @@
+id: m4-l7-governance-matrix-json-shape-freeze
+title: Freeze governance matrix JSON top-level shape and key order
+created_at: "2026-06-01T17:52:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Freeze the governance matrix JSON export top-level shape and key ordering so
+  machine consumers can rely on a stable contract beyond field presence alone.
+
+problem_statement:
+  - "The governance matrix JSON export now includes `_meta`, groups, `_ordering`, and `_summary`."
+  - "Tests assert many fields exist, but the full top-level shape and key ordering are not frozen as a single explicit contract."
+  - "Future changes could preserve field presence while still drifting the machine-facing structure in subtle ways."
+
+must_do:
+  - Add an explicit shared JSON shape contract for the governance matrix export.
+  - Freeze at least:
+    - top-level key order
+    - per-group key order
+    - `_ordering` section key order
+    - `_summary` section key order
+  - Make JSON export builder consume that explicit contract rather than relying on incidental dict construction order.
+  - Add focused tests that fail on JSON shape drift.
+  - Include a real-path verification command for `--format json`.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not change existing data values or existing panel/markdown outputs.
+  - Do not reorder existing semantic group/status order.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l7-governance-matrix-json-shape-freeze.yaml
+  - .ai/runs/m4-l7-governance-matrix-json-shape-freeze/**
+  - .ai/reports/2026-06-01-m4-l7-governance-matrix-json-shape-freeze-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+
+token_budget_guidance:
+  - Read only governance_matrix.py and focused governance export tests unless blocked.
+  - Keep the slice to JSON shape contract freeze plus regression coverage only.
+
+acceptance_criteria:
+  - Governance matrix exposes an explicit JSON shape contract.
+  - JSON export preserves current visible top-level shape and key order using that contract.
+  - Focused tests fail if top-level or section key ordering drifts.
+  - Real-path `--format json` still succeeds.
+
+suggested_test_commands:
+  - python -m pytest tests/test_governance_matrix_audit.py tests/test_go_dispatch.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format json

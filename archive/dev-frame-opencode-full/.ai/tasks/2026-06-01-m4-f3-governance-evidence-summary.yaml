@@ -1,0 +1,61 @@
+id: m4-f3-governance-evidence-summary
+title: Surface advanced governance status counts in verify and run evidence
+created_at: "2026-06-01T00:55:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Extend evidence semantics for advanced governance statuses without changing
+  blocking behavior. verify_run_evidence and run verify should expose
+  deterministic governance counts so accepted_risk, closed, obsolete, and
+  mitigated are visible in the evidence layer, not only in final-report.
+
+problem_statement:
+  - "M4-F1 made advanced governance statuses visible in prompt filtering and final-report."
+  - "M4-F2 made those statuses writable through deterministic helpers and CLI transitions."
+  - "verify_run_evidence still reports only evidence_ok / chain_trusted / final_report_consistent, without governance summary."
+
+must_do:
+  - Extend verify_run_evidence to include deterministic governance counts derived from ledger_summary.
+  - Extend run verify CLI output to print these governance counts.
+  - Keep this summary read-only and non-blocking; do not change pass/fail rules.
+  - Add focused tests for verify_run_evidence result shape and run verify output.
+
+must_not_do:
+  - Do not change blocking semantics.
+  - Do not change issue transition helpers.
+  - Do not change coding_graph, reviewer, shell_runner, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - .ai/tasks/2026-06-01-m4-f3-governance-evidence-summary.yaml
+  - .ai/runs/m4-f3-governance-evidence-summary/**
+  - .ai/reports/2026-06-01-m4-f3-governance-evidence-summary-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only cli evidence helpers, issue_ledger summary helper, and directly relevant tests unless blocked.
+  - Keep this slice to reporting/verification output only.
+
+acceptance_criteria:
+  - verify_run_evidence returns governance summary counts.
+  - run verify displays governance summary counts.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_issue_ledger.py -q
+  - python -m pytest tests/ -q

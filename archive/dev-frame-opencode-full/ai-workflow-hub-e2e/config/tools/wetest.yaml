@@ -1,0 +1,7 @@
+# WeTest 配置
+wetest:
+  api_base: "https://api.wetest.qq.com"
+  api_key: "${WETEST_API_KEY}"
+  api_secret: "${WETEST_API_SECRET}"
+  poll_interval: 60
+  timeout: 3600

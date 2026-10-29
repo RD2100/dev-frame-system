@@ -1,0 +1,87 @@
+id: m4-b1-plan-auditor-node
+title: Add deterministic plan_auditor node before human_gate
+created_at: "2026-05-31T22:20:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Land the first minimal M4-B slice: add a deterministic plan_auditor node
+  before human_gate in the workflow graph, write plan-review artifacts, and
+  let the node trigger block/human_required on clear plan-scope problems
+  without introducing a model-backed planner.
+
+problem_statement:
+  - "Current graph starts at human_gate; there is no plan_auditor node."
+  - "issue_ledger already supports plan-issues.json and source=plan_auditor."
+  - "We need the governance hook before human gate, but should keep the first slice deterministic and small."
+
+must_do:
+  - Add a new deterministic node named plan_auditor_node.
+  - Insert it before human_gate in coding_graph.
+  - Write plan-review.md and plan-issues.json in the run directory.
+  - Route semantics:
+    - clean plan -> continue to human_gate
+    - blocked plan -> go to final_node
+    - human_required plan -> go to human_gate_node
+  - Use existing state fields only where possible; add schema fields only if truly needed.
+  - The first deterministic checks must stay narrow and explicit. Include only high-signal plan checks such as:
+    - missing allowed_files / empty scope
+    - overlap between allowed_files and forbidden_files
+    - very large allowed_files scope relative to current max_changed_files constraint
+  - Emit structured plan issues using the existing Issue Contract shape where appropriate.
+  - Ensure executor/fixer still cannot write reviewer or plan-review artifacts.
+  - Add focused graph and node tests.
+
+must_not_do:
+  - Do not add a model-backed plan auditor yet.
+  - Do not implement issues CLI.
+  - Do not change reviewer semantics.
+  - Do not change shell safety files.
+  - Do not edit ai-workflow-hub/tasks.yaml.
+  - Do not edit ai-workflow-hub-e2e files.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/plan_auditor.py
+  - ai-workflow-hub/src/ai_workflow_hub/schemas.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_m3_integration.py
+  - ai-workflow-hub/tests/test_plan_auditor.py
+  - .ai/tasks/2026-05-31-m4-b1-plan-auditor-node.yaml
+  - .ai/runs/m4-b1-plan-auditor-node/**
+  - .ai/reports/2026-05-31-m4-b1-plan-auditor-node-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+
+token_budget_guidance:
+  - Read only coding_graph.py, schemas.py, issue_ledger plan artifact support, human_gate node, and directly relevant tests unless blocked.
+  - Keep the auditor deterministic; do not read unrelated model-reviewer code.
+  - Prefer one focused new test module plus small graph-route updates.
+
+acceptance_criteria:
+  - Graph entrypoint is plan_auditor_node, not human_gate_node.
+  - Clean plan routes into human_gate_node.
+  - Missing or invalid scope can block before human_gate.
+  - human_required plan routes into human_gate_node.
+  - plan-review.md and plan-issues.json are written by plan_auditor_node.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_plan_auditor.py tests/test_go_dispatch.py tests/test_m3_integration.py -q
+  - python -m pytest tests/ -q
+
+reviewer_focus:
+  - Check that the new node is truly before human_gate in the graph.
+  - Check that the first slice stays deterministic and does not pull in a model backend.
+  - Check that routing semantics do not bypass finalizer on blocked outcomes.

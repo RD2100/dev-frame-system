@@ -1,0 +1,67 @@
+id: m4-l6-governance-matrix-json-meta-version
+title: Add explicit meta/version contract to governance matrix JSON export
+created_at: "2026-06-01T17:32:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Add explicit `_meta` versioning information to the governance matrix JSON
+  export so machine consumers have a stable contract anchor for future
+  evolution.
+
+problem_statement:
+  - "The governance matrix now has a deterministic JSON export."
+  - "That export currently lacks explicit format metadata or schema version information."
+  - "Without a `_meta` contract, downstream consumers cannot distinguish intentional format evolution from accidental drift."
+
+must_do:
+  - Add a deterministic `_meta` section to the governance matrix JSON export.
+  - Include at least:
+    - export kind / format identifier
+    - schema or contract version
+    - supported format name for the CLI branch
+  - Keep existing group data, `_ordering`, and `_summary` unchanged except for adding `_meta`.
+  - Add focused tests for `_meta` presence, values, and determinism.
+  - Include a real-path verification command for `--format json`.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not change existing panel/markdown outputs.
+  - Do not reorder existing groups or statuses.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l6-governance-matrix-json-meta-version.yaml
+  - .ai/runs/m4-l6-governance-matrix-json-meta-version/**
+  - .ai/reports/2026-06-01-m4-l6-governance-matrix-json-meta-version-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+
+token_budget_guidance:
+  - Read only governance_matrix.py and the focused governance export tests unless blocked.
+  - Keep the slice to `_meta`/version contract plus regression coverage only.
+
+acceptance_criteria:
+  - JSON export contains a deterministic `_meta` section.
+  - `_meta` includes format identifier and schema/contract version.
+  - Existing group data, `_ordering`, and `_summary` remain intact.
+  - Focused tests pass and the real-path JSON command succeeds.
+
+suggested_test_commands:
+  - python -m pytest tests/test_governance_matrix_audit.py tests/test_go_dispatch.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format json

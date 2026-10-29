@@ -1,0 +1,68 @@
+id: m4-l10-governance-matrix-snapshot-shape-freeze
+title: Freeze governance matrix snapshot shape and key order
+created_at: "2026-06-01T18:54:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Freeze the governance matrix snapshot artifact itself so reviewers and
+  tooling can rely on a stable top-level and section key sequence for the
+  contract snapshot.
+
+problem_statement:
+  - "The governance matrix contract snapshot now exists and is useful."
+  - "Its current shape is tested informally by presence checks, but the snapshot artifact itself is not yet frozen as an explicit shape contract."
+  - "Without that freeze, the contract snapshot could drift while still remaining superficially valid."
+
+must_do:
+  - Add an explicit snapshot shape/order contract.
+  - Freeze at least:
+    - snapshot top-level key order
+    - `ordering` section key order
+    - `json_shape` section key order
+    - `summary` section key order
+  - Make the snapshot builder consume the explicit contract where appropriate.
+  - Add focused tests that fail on snapshot shape drift.
+  - Include a real-path verification command for `--format snapshot`.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not change existing `panel`, `markdown`, or `json` payloads.
+  - Do not change existing snapshot data values except as required to express shape contract usage.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l10-governance-matrix-snapshot-shape-freeze.yaml
+  - .ai/runs/m4-l10-governance-matrix-snapshot-shape-freeze/**
+  - .ai/reports/2026-06-01-m4-l10-governance-matrix-snapshot-shape-freeze-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+
+token_budget_guidance:
+  - Read only governance_matrix.py and focused governance snapshot tests unless blocked.
+  - Keep the slice to snapshot shape contract freeze plus regression coverage only.
+
+acceptance_criteria:
+  - Governance matrix exposes an explicit snapshot shape/order contract.
+  - Snapshot output preserves the current visible top-level and section order using that contract.
+  - Focused tests fail if snapshot shape drifts.
+  - Real-path `--format snapshot` still succeeds.
+
+suggested_test_commands:
+  - python -m pytest tests/test_governance_matrix_audit.py tests/test_go_dispatch.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format snapshot

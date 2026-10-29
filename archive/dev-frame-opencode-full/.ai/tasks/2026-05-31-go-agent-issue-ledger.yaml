@@ -1,0 +1,60 @@
+id: 2026-05-31-go-agent-issue-ledger
+mode: edit
+profile: ai-dev
+title: Implement Agent Issue Ledger for @go workflow
+description: |
+  Implement a minimal Agent Issue Ledger so each @go run records structured
+  issues, writes a per-run issue-delta.json, updates the long-lived
+  .ai/ledger/issues.jsonl, recurrence-index.json, and lessons.md files, and
+  injects open/recurring issue context into the next @go run.
+
+  Requirements:
+  1. Add an issue_ledger module with append/load/merge/prompt-context helpers.
+  2. Support structured issues with phase, source, severity, category, title,
+     status, recurrence_key, evidence_paths, verification, and next_prompt_hint.
+  3. At @go/_execute_run start, load ledger prompt context and include it in
+     workflow state so executor/fixer prompts receive known issue reminders.
+  4. At _execute_run completion, derive issue records from failed/blocked/
+     human_required status, safety findings, evidence verification failures,
+     and missing evidence, write run issue-delta.json, then merge into .ai/ledger.
+  5. Keep implementation deterministic and small. Do not add external deps.
+  6. Add focused pytest coverage for ledger merging, recurrence counting,
+     prompt context generation, and _execute_run issue-delta integration if
+     feasible without spawning OpenCode.
+
+  Constraints:
+  - Preserve existing dirty files and unrelated changes.
+  - Do not edit ai-workflow-hub/tasks.yaml or smoke_report.txt.
+  - Do not weaken tests.
+allow_read:
+  - AGENTS.md
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/run_store.py
+  - ai-workflow-hub/src/ai_workflow_hub/config_loader.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/executor.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/fixer.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/src/ai_workflow_hub/schemas.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_core_state.py
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/schemas.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/executor.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/fixer.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - .ai/reports/2026-05-31-go-agent-issue-ledger-result.md
+deny_write:
+  - "**/.env"
+  - "**/.env.*"
+  - "**/secrets/**"
+  - "**/node_modules/**"
+  - "**/.git/**"
+  - "ai-workflow-hub/tasks.yaml"
+  - "smoke_report.txt"
+verify:
+  - cd ai-workflow-hub; python -m pytest tests/test_issue_ledger.py -q
+  - cd ai-workflow-hub; python -m pytest tests/test_issue_ledger.py tests/test_go_dispatch.py -q
+expected_output:
+  report: .ai/reports/2026-05-31-go-agent-issue-ledger-result.md

@@ -1,0 +1,67 @@
+{
+  "generated_at": "2026-06-11T02:09:52.980089+00:00",
+  "overall_score": 0.93,
+  "metrics": [
+    {
+      "key": "test_health",
+      "label": "Test Health",
+      "score": 0.8,
+      "detail": "4/5 smoke commands PASS"
+    },
+    {
+      "key": "evidence_integrity",
+      "label": "Evidence Integrity",
+      "score": 1.0,
+      "detail": "latest pack (t2-live-bootstrap): passed"
+    },
+    {
+      "key": "route_ledger_consistency",
+      "label": "Route-Ledger Consistency",
+      "score": 1.0,
+      "detail": "43 accepted / 49 ledger entries, production promoted, broader chain unblocked, blocked consistent"
+    },
+    {
+      "key": "submission_safety",
+      "label": "Submission Safety",
+      "score": 1.0,
+      "detail": "31/31 submissions successful"
+    },
+    {
+      "key": "stale_documentation_risk",
+      "label": "Stale Documentation Risk",
+      "score": 1.0,
+      "detail": "staleness check PASS: 0 stale patterns"
+    },
+    {
+      "key": "broader_real_chain_coverage",
+      "label": "Broader Real-Chain Coverage",
+      "score": 1.0,
+      "detail": "broader real-chain testing unblocked (P12 authorized)"
+    },
+    {
+      "key": "rollback_readiness",
+      "label": "Rollback Readiness",
+      "score": 1.0,
+      "detail": "ROLLBACK_PLAN.md exists (723 bytes)"
+    },
+    {
+      "key": "monitoring_readiness",
+      "label": "Monitoring Readiness",
+      "score": 1.0,
+      "detail": "MONITORING_PLAN.md exists (477 bytes)"
+    },
+    {
+      "key": "human_override_readiness",
+      "label": "Human Override Readiness",
+      "score": 1.0,
+      "detail": "HUMAN_OVERRIDE_PROTOCOL.md exists (654 bytes)"
+    },
+    {
+      "key": "open_gap_count",
+      "label": "Open Gap Count",
+      "score": 0.5,
+      "detail": "P0≈2, P1≈2, P2≈1 open"
+    }
+  ],
+  "blocked_items_preserved": true
+}

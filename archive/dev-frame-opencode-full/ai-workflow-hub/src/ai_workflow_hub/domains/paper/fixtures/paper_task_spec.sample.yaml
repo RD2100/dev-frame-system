@@ -1,0 +1,24 @@
+# Paper Task Spec - 示例 Fixture
+# 定义一次论文写作任务的结构化描述，供 Context Pack Builder 和
+# Deterministic Gate 使用。所有字段均为虚构内容。
+
+task_id: "paper-task-001-draft-intro"
+project_id: "edu-policy-research-2026"
+paper_id: "paper-001"
+paper_type: "empirical"
+target_journal: "CSSCI"
+chapter: "引言"
+section: "1.1 研究背景"
+task_type: "draft"
+input_policy: "context_pack_only"
+constraints:
+  - "不得使用未在 literature_notes 中出现的文献"
+  - "不得使用模板化表达（如'不是……而是……'结构超过2次）"
+  - "段落长度控制在 150-300 字之间"
+acceptance_criteria:
+  - "段落功能匹配度 >= 70%"
+  - "表达风险等级 <= medium"
+  - "引用来源均在 zotero_references 中"
+human_required_rules:
+  - "涉及真实调研数据时需人工确认"
+confidentiality: "private"

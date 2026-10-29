@@ -1,0 +1,76 @@
+id: m4-f5-governance-display-alignment
+title: Align governance status display across run show verify and final report
+created_at: "2026-06-01T01:30:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Align display semantics for governance status summaries across run_show,
+  run_verify, and final-report. The counts already exist, but presentation is
+  inconsistent: final-report shows full counts, run_verify only shows non-zero
+  items, and run_show currently shows none.
+
+problem_statement:
+  - "final-report.md now includes a full ISSUE LEDGER section with governance counts."
+  - "run_verify prints only non-zero governance counts."
+  - "run_show does not show governance counts at all."
+
+must_do:
+  - Add a Governance Summary section to run_show.
+  - Align labels for governance counts across run_show and run_verify with final-report wording.
+  - Prefer deterministic full summary output instead of only non-zero items.
+  - Keep the change display-only; do not change evidence pass/fail rules or status semantics.
+  - Add focused tests for CLI output alignment.
+
+must_not_do:
+  - Do not change blocking semantics.
+  - Do not change issue transition helpers.
+  - Do not change coding_graph, reviewer, shell_runner, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-f5-governance-display-alignment.yaml
+  - .ai/runs/m4-f5-governance-display-alignment/**
+  - .ai/reports/2026-06-01-m4-f5-governance-display-alignment-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only cli.py run_show/run_verify helpers and directly relevant tests unless blocked.
+  - Keep this slice display-only and avoid touching underlying summary logic.
+
+acceptance_criteria:
+  - run_show displays governance summary counts.
+  - run_verify displays governance summary using aligned labels.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q
+
+status: completed
+completed_at: "2026-06-01T02:00:00+08:00"
+implemented_by: Claude Code (SADP dispatch)
+changes:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py:
+      - "Added Governance Summary section to run_show (full deterministic display)"
+      - "Changed run_verify governance display: full summary with aligned labels, including P0 and file counts"
+  - ai-workflow-hub/tests/test_go_dispatch.py:
+      - "test_run_show_displays_full_governance_summary"
+      - "test_run_show_governance_all_zeros_still_shows_section"
+      - "test_run_verify_displays_full_governance_summary"
+tests:
+  focused: "18 passed (3 new + 15 existing)"
+  broad: "325 passed, 1 skipped"

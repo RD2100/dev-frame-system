@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "<string>", line 23, in <module>
+  File "<string>", line 6, in run
+  File "C:\Users\RD\AppData\Local\Programs\Python\Python310\lib\subprocess.py", line 505, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+  File "C:\Users\RD\AppData\Local\Programs\Python\Python310\lib\subprocess.py", line 1154, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+  File "C:\Users\RD\AppData\Local\Programs\Python\Python310\lib\subprocess.py", line 1546, in _communicate
+    raise TimeoutExpired(self.args, orig_timeout)
+subprocess.TimeoutExpired: Command '['python', '-m', 'pytest', 'tests/', '-q', '--tb=line']' timed out after 120 seconds

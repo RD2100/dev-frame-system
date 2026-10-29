@@ -1,0 +1,69 @@
+id: m4-l9-governance-matrix-contract-snapshot
+title: Add governance matrix contract snapshot export
+created_at: "2026-06-01T18:32:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Expose the governance matrix contract itself as a deterministic structured
+  snapshot so reviewers and tooling can compare the full contract directly,
+  instead of reconstructing it from multiple sections.
+
+problem_statement:
+  - "The governance matrix JSON export now contains `_meta`, group data, `_ordering`, and `_summary`."
+  - "There is still no single explicit contract snapshot payload for consumers that want to reason about the frozen contract itself."
+  - "Consumers currently need to assemble contract understanding from multiple sections and constants."
+
+must_do:
+  - Add a deterministic structured contract snapshot export for governance matrix.
+  - Snapshot must include the contract-defining pieces in one place, at minimum:
+    - `_meta`
+    - ordering contracts
+    - JSON shape contracts
+    - current summary counts
+  - Expose the snapshot through the existing governance CLI with an explicit format selector.
+  - Keep existing `panel`, `markdown`, and `json` outputs unchanged.
+  - Add focused tests for snapshot shape, determinism, and CLI snapshot mode.
+  - Include a real-path verification command for the snapshot format.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not change existing `panel` / `markdown` / `json` payloads.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l9-governance-matrix-contract-snapshot.yaml
+  - .ai/runs/m4-l9-governance-matrix-contract-snapshot/**
+  - .ai/reports/2026-06-01-m4-l9-governance-matrix-contract-snapshot-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only governance_matrix.py, the governance CLI snippet, and focused governance export tests unless blocked.
+  - Keep the slice to contract snapshot export + CLI selector + regression coverage only.
+
+acceptance_criteria:
+  - Governance matrix exposes a deterministic structured contract snapshot.
+  - Existing `panel`, `markdown`, and `json` outputs remain unchanged.
+  - CLI exposes the snapshot with an explicit format value.
+  - Focused tests pass and the real-path snapshot command succeeds.
+
+suggested_test_commands:
+  - python -m pytest tests/test_governance_matrix_audit.py tests/test_go_dispatch.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format snapshot
+  - python -m ai_workflow_hub.cli governance matrix --format json

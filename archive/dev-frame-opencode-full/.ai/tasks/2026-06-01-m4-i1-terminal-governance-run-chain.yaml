@@ -1,0 +1,62 @@
+id: m4-i1-terminal-governance-run-chain
+title: Add same-run governance assertions for blocked human_required and failed
+created_at: "2026-06-01T11:55:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Add a same-run terminal-state chain assertion for governance-aware reporting.
+  We already have wording tests and cross-run governance tests; this slice
+  proves that one blocked/human_required/failed run surfaces coherent
+  governance information across final-report, failure-analysis, run_recover,
+  run_show, and run_verify.
+
+problem_statement:
+  - "M4-H2 covers wording matrix per helper/CLI, but not one same-run chain spanning all surfaces."
+  - "We need at least one deterministic same-run terminal-state assertion to prove these outputs stay aligned together."
+
+must_do:
+  - Add at least one focused same-run chain test for a non-passed terminal state.
+  - The test must assert coherence across:
+    - final-report
+    - failure-analysis
+    - analyze_recovery / run_recover
+    - verify_run_evidence
+    - run_show and/or run_verify display
+  - Prefer a blocked or human_required run with governance summary present.
+  - Keep the slice test-only unless a real inconsistency is exposed.
+
+must_not_do:
+  - Do not add new runtime features unless the test finds a real contradiction.
+  - Do not touch src/** by default.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - .ai/tasks/2026-06-01-m4-i1-terminal-governance-run-chain.yaml
+  - .ai/runs/m4-i1-terminal-governance-run-chain/**
+  - .ai/reports/2026-06-01-m4-i1-terminal-governance-run-chain-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only existing governance-related test files unless blocked.
+  - Prefer one shared synthetic-run pattern over many overlapping tests.
+
+acceptance_criteria:
+  - There is at least one same-run terminal-state chain assertion spanning multiple reporting surfaces.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_reviewer_minimal_loop.py -q
+  - python -m pytest tests/ -q

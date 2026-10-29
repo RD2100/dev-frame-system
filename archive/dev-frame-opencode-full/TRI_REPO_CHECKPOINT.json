@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-06-07T15:59:45.880953+00:00",
+  "status": "ALL_GREEN",
+  "repos": {
+    "agent-acceptance": {
+      "latest_commit": "24f2f2b5 docs: offline checkpoint bundle + manifest",
+      "tests": "247 PASS",
+      "commits": [
+        "24f2f2b5 docs: offline checkpoint bundle + manifest",
+        "d98936ff fix: CONTROL-PLANE-TEST-FAILURE-TRIAGE ！ add bypass checker (65 PASS)",
+        "cffb375f feat: v0.2.0-rc dashboard + release candidate tag"
+      ]
+    },
+    "devframe-control-plane": {
+      "latest_commit": "a22c018 feat: run history ！ log/tail workflow execution records",
+      "tests": "65 PASS",
+      "commits": [
+        "a22c018 feat: run history ！ log/tail workflow execution records",
+        "5f6084d feat: workflow artifacts ！ save/list/latest run results",
+        "408917b feat: DevFrame CLI ！ run/list/smoke/status commands"
+      ]
+    },
+    "dev-frame-opencode": {
+      "latest_commit": "b4ed046a fix: restore render_full_governance_md + issue_ledger ！ ai-workflow-hub 140 PASS",
+      "tests": "5/5 PASS",
+      "commits": [
+        "b4ed046a fix: restore render_full_governance_md + issue_ledger ！ ai-workflow-hub 140 PASS",
+        "b8990235 fix: restore run_governance, plan_auditor, reviewer nodes",
+        "7f8b8fd8 docs: rewrite README in Chinese ！ architecture, governance model, guard system"
+      ]
+    }
+  }
+}

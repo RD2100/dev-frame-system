@@ -1,0 +1,67 @@
+id: m4-l11-governance-snapshot-meta-identity
+title: Give governance snapshot its own meta identity contract
+created_at: "2026-06-01T19:08:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Give the governance matrix snapshot export its own explicit `_meta` identity
+  so machine consumers can distinguish snapshot payloads from the ordinary JSON
+  export without inference.
+
+problem_statement:
+  - "The governance matrix now exposes both `--format json` and `--format snapshot`."
+  - "Today the snapshot reuses the same `_meta` identity as the ordinary JSON export."
+  - "That makes two distinct payload types look identical to consumers at the metadata layer."
+
+must_do:
+  - Add a dedicated `_meta` contract for snapshot export.
+  - Preserve the existing JSON export `_meta` contract unchanged.
+  - Keep snapshot top-level shape unchanged except for the snapshot-specific `_meta` values.
+  - Add focused tests proving:
+    - snapshot `_meta` differs appropriately from JSON `_meta`
+    - snapshot `_meta` matches its own explicit contract
+    - real-path `--format snapshot` returns the snapshot-specific identity
+  - Include real-path verification for both `--format snapshot` and `--format json`.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not change existing panel/markdown outputs.
+  - Do not change JSON export content except where tests assert it remains unchanged.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l11-governance-snapshot-meta-identity.yaml
+  - .ai/runs/m4-l11-governance-snapshot-meta-identity/**
+  - .ai/reports/2026-06-01-m4-l11-governance-snapshot-meta-identity-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+
+token_budget_guidance:
+  - Read only governance_matrix.py and focused governance export tests unless blocked.
+  - Keep the slice to snapshot meta identity plus regression coverage only.
+
+acceptance_criteria:
+  - Snapshot export exposes its own explicit `_meta` identity contract.
+  - JSON export `_meta` remains unchanged.
+  - Focused tests pass and real-path snapshot/json commands both succeed.
+
+suggested_test_commands:
+  - python -m pytest tests/test_governance_matrix_audit.py tests/test_go_dispatch.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format snapshot
+  - python -m ai_workflow_hub.cli governance matrix --format json

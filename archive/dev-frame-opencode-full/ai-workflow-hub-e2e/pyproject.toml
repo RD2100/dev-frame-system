@@ -1,0 +1,21 @@
+[project]
+name = "ai-workflow-hub-e2e"
+version = "0.1.0"
+description = "dev-frame-opencode E2E evidence integrity: API integration, model validation, SHA256 signing"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "pyyaml>=6.0",
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+android = ["airtest", "pocoui"]
+allure = ["allure-pytest"]
+all = ["airtest", "pocoui", "allure-pytest"]
+
+[project.scripts]
+tf = "cli.main:cli"
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "backup", "reports", "docs"]

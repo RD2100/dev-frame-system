@@ -1,0 +1,48 @@
+# FitTrack 健身管理小程序 — TestFrame 项目配置
+project:
+  name: "fittrack"
+  package: "wx251ae5c87df3f124"
+  type: "miniprogram"
+  cloud_env: "fittrack-env"
+
+stages:
+  - stage: smoke
+    tools: [pytest_api]
+    timeout: 120
+    retry: 1
+    on_failure: abort
+
+  - stage: regression
+    tools: [pytest_api]
+    timeout: 300
+    retry: 1
+    on_failure: continue
+
+  - stage: evidence
+    tools: []
+    timeout: 30
+    on_failure: continue
+
+  - stage: report
+    tools: []
+    timeout: 30
+    on_failure: continue
+
+  - stage: attribution
+    tools: []
+    timeout: 30
+    on_failure: continue
+
+  - stage: gate
+    tools: []
+    timeout: 10
+    on_failure: continue
+
+pytest_api:
+  test_dir: "tests/fittrack/"
+  json_report: "reports/pytest_results.json"
+
+report:
+  format: "allure"
+  results_dir: "reports/allure-results/"
+  html_dir: "reports/allure-report/"

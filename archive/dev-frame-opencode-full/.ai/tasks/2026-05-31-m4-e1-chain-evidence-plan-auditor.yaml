@@ -1,0 +1,67 @@
+id: m4-e1-chain-evidence-plan-auditor
+title: Extend chain evidence and run verification for plan_auditor
+created_at: "2026-05-31T23:55:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Bring the new deterministic plan_auditor node into the formal evidence
+  contract. chain-evidence and run verification should account for
+  plan-review artifacts and plan_auditor participation so the real workflow
+  chain stays auditable end to end.
+
+problem_statement:
+  - "plan_auditor now exists in the graph and writes plan-review artifacts."
+  - "verify_run_evidence still validates the older reviewer-era artifact set only."
+  - "chain-evidence generation also predates plan_auditor and does not formally expose that node in the trusted chain."
+
+must_do:
+  - Extend chain-evidence generation so plan_auditor participation is represented deterministically.
+  - Update run verification so plan-review.md and plan-issues.json are validated when the run includes plan_auditor output.
+  - Keep verification backward compatible for older runs that predate plan_auditor when appropriate.
+  - Add focused tests covering:
+    - run with plan-review artifacts passes evidence verification
+    - missing plan-review artifact fails when plan_auditor evidence is expected
+    - chain-evidence includes plan_auditor node metadata
+  - Keep this slice deterministic and local to evidence/verification code.
+
+must_not_do:
+  - Do not change issue CLI behavior.
+  - Do not change shell safety behavior.
+  - Do not change reviewer blocking semantics.
+  - Do not edit ai-workflow-hub/tasks.yaml.
+  - Do not edit ai-workflow-hub-e2e files.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/plan_auditor.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_plan_auditor.py
+  - .ai/tasks/2026-05-31-m4-e1-chain-evidence-plan-auditor.yaml
+  - .ai/runs/m4-e1-chain-evidence-plan-auditor/**
+  - .ai/reports/2026-05-31-m4-e1-chain-evidence-plan-auditor-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+
+token_budget_guidance:
+  - Read only cli evidence helpers, plan_auditor output shape, and directly relevant tests unless blocked.
+  - Keep the first slice to evidence contract only; do not widen into full governance strategy.
+
+acceptance_criteria:
+  - chain-evidence.json records plan_auditor participation deterministically.
+  - verify_run_evidence validates plan-review artifacts when applicable.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_plan_auditor.py -q
+  - python -m pytest tests/ -q

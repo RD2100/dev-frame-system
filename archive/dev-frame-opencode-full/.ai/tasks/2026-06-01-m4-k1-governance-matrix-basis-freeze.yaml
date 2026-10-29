@@ -1,0 +1,58 @@
+id: m4-k1-governance-matrix-basis-freeze
+title: Freeze shared synthetic-run basis for governance chain matrices
+created_at: "2026-06-01T13:20:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Extract the duplicated synthetic-run setup/basis shared by terminal
+  governance matrix tests and plan_auditor governance matrix tests. This is a
+  test-only maintainability slice that reduces future drift and makes new
+  branch additions cheaper.
+
+problem_statement:
+  - "test_go_dispatch.py and test_plan_auditor.py now both contain sizeable synthetic-run governance chain scaffolds."
+  - "The assertions differ, but the ledger isolation, hub/run setup, and many state/file setup steps are structurally similar."
+  - "Without a shared basis, later additions will keep cloning boilerplate."
+
+must_do:
+  - Refactor the governance matrix tests to share a smaller common basis/helper where practical.
+  - Preserve all current coverage and assertions.
+  - Keep this slice test-only.
+  - Avoid broad test rewrites; only extract the repeated basis.
+
+must_not_do:
+  - Do not change runtime behavior.
+  - Do not touch src/**.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_plan_auditor.py
+  - .ai/tasks/2026-06-01-m4-k1-governance-matrix-basis-freeze.yaml
+  - .ai/runs/m4-k1-governance-matrix-basis-freeze/**
+  - .ai/reports/2026-06-01-m4-k1-governance-matrix-basis-freeze-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only the two governance matrix test files unless blocked.
+  - Prefer a helper extraction over whole-test redesign.
+
+acceptance_criteria:
+  - Governance matrix tests use a shared synthetic-run basis/helper.
+  - Existing branch/state coverage is preserved.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_plan_auditor.py -q
+  - python -m pytest tests/ -q

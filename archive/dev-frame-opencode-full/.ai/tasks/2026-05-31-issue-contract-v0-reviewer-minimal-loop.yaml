@@ -1,0 +1,185 @@
+id: issue-contract-v0-reviewer-minimal-loop
+created_at: "2026-05-31T00:00:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+description: >
+  Implement Issue Contract v0 and an independent reviewer minimal loop for the
+  @go pipeline. Reviewer-generated structured issues must be validated, merged
+  into the Agent Issue Ledger, and used to block finalizer success when
+  unresolved P0 issues remain.
+
+intent: >
+  Prevent executor self-review by adding an independent reviewer pass whose
+  structured findings enter the ledger and affect finalizer routing.
+
+scope:
+  must_do:
+    - Define Issue Contract v0 in code.
+    - Implement validate_issues().
+    - Validate review-issues.json before merge.
+    - Add a minimal reviewer pass/node.
+    - Make reviewer output review.md, review.yaml, and review-issues.json.
+    - Merge validated review-issues.json into .ai/ledger.
+    - Generate canonical issue_id during Ledger merge.
+    - Treat agent-provided issue_id as provisional_id only.
+    - Support recurrence_key-based issue merging.
+    - Separate status and recurring fields.
+    - Implement fixed vs verified semantics.
+    - Block finalizer success for open/fixed/wontfix P0 issues.
+    - Exclude verified and wontfix issues from ledger_prompt_context.
+    - Bound ledger prompt injection to at most 5 issues.
+    - Add fake pipeline E2E tests.
+    - Add fail-closed tests for malformed reviewer output.
+
+  must_not_do:
+    - Do not implement plan_auditor.
+    - Do not implement aihub issues CLI.
+    - Do not add complex human gate logic.
+    - Do not add automatic severity escalation.
+    - Do not add full report archiving rules.
+    - Do not rely on real agent output for core E2E assertions.
+    - Do not allow reviewer to modify code.
+    - Do not let reviewer replace tester or finalizer.
+    - Do not touch generated task queue or smoke report files.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/schemas.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - .ai/reports/2026-05-31-issue-contract-v0-reviewer-minimal-loop-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - smoke_report.txt
+  - ai-workflow-hub-e2e/**
+
+issue_contract_v0:
+  status:
+    allowed: [open, fixed, verified, wontfix]
+  severity:
+    allowed: [P0, P1, P2, P3]
+  source:
+    allowed: [plan_auditor, executor, tester, reviewer, ledger, manual]
+  phase:
+    allowed: [plan, execute, test, review, fix, finalize]
+  required_fields:
+    - recurrence_key
+    - title
+    - severity
+    - status
+    - source
+    - phase
+    - run_id
+    - evidence
+    - suggested_fix
+  ledger_generated_fields:
+    - issue_id
+    - created_at
+    - updated_at
+    - occurrences
+    - first_seen_run_id
+    - last_seen_run_id
+  optional_or_lifecycle_fields:
+    - provisional_id
+    - recurring
+    - verified_at
+    - verified_by
+    - verification_command
+
+reviewer_pass:
+  inputs:
+    - TaskSpec
+    - executor summary
+    - changed files / diff
+    - tester output
+    - safety report
+    - ledger_prompt_context
+    - previous open issues
+  outputs:
+    - review.md
+    - review.yaml
+    - review-issues.json
+  forbidden_behaviors:
+    - modifying code
+    - auto-fixing issues
+    - rerunning the full test pipeline
+    - replacing tester
+    - replacing finalizer
+
+review_yaml_minimum_shape:
+  required_fields:
+    - passed
+    - summary
+    - highest_severity
+    - issue_count
+    - blocking_issue_count
+    - recommendation
+  recommendation_allowed: [pass, block_finalizer]
+
+ledger_merge_rules:
+  - Validate review-issues.json before merge.
+  - Treat reviewer-provided issue_id as provisional only.
+  - Generate canonical issue_id in Ledger merge.
+  - Merge same recurrence_key as the same issue family.
+  - If same recurrence_key is already open, increment occurrences.
+  - If same recurrence_key was verified but appears again, set status to open and recurring to true.
+  - Update last_seen_run_id on every recurrence.
+
+finalizer_rules:
+  - open P0 blocks finalizer.
+  - fixed P0 blocks finalizer.
+  - wontfix P0 blocks finalizer in Phase 1.
+  - verified P0 does not block finalizer.
+  - malformed reviewer output blocks finalizer through a parse issue.
+
+prompt_injection_rules:
+  - verified issues are excluded from ledger_prompt_context.
+  - wontfix issues are excluded unless explicitly configured otherwise.
+  - prompt context must be bounded.
+  - Phase 1 may inject at most 5 issues.
+  - open P0 issues have highest priority.
+
+tests:
+  fake_pipeline_e2e:
+    - Generate valid review-issues.json.
+    - Validate issues.
+    - Merge into Ledger.
+    - Inject open issue into next run prompt context.
+    - Mark issue verified.
+    - Confirm verified issue is not injected again.
+    - Confirm open/fixed/wontfix P0 blocks finalizer.
+  fail_closed_cases:
+    - malformed JSON blocks finalizer.
+    - missing required field blocks finalizer.
+    - invalid severity blocks finalizer.
+    - invalid status blocks finalizer.
+    - invalid review.yaml shape blocks finalizer or produces a parse issue.
+
+acceptance_criteria:
+  - validate_issues() rejects bad issue files.
+  - reviewer pass can be called by @go.
+  - reviewer does not modify code.
+  - review-issues.json passes the shared Issue Contract v0.
+  - Ledger merge creates canonical issue_id.
+  - recurrence_key correctly merges repeated issues.
+  - verified recurrence reopens as recurring.
+  - open/fixed/wontfix P0 prevents finalizer success.
+  - verified issue is absent from next ledger_prompt_context.
+  - fake E2E passes without relying on real agent output.
+  - malformed reviewer output fails closed.
+
+completion_rule: >
+  This phase is complete only when the fake E2E proves the full loop:
+  review issue -> validate -> ledger merge -> prompt injection -> verification
+  -> no reinjection -> P0 finalizer blocking.

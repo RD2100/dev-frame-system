@@ -1,0 +1,9 @@
+A106 review appears to have stopped after the opening sentence.
+
+Please now finish the review of the already-uploaded CDP_EVIDENCE_A106.zip and respond with the final verdict.
+
+Your first line must be exactly one of:
+ACCEPTED
+REJECTED
+
+If REJECTED, include the specific blocking issue and exact directive for the next acceptance.

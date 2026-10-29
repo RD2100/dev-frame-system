@@ -1,0 +1,121 @@
+# dev-frame-opencode monorepo
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / TypeScript
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Build
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# SQLite WAL/backup
+*.db-wal
+*.db-shm
+*.db.bak
+
+# CodeGraph index (build artifact, not source)
+.codegraph/
+
+# Test coverage
+coverage/
+.nyc_output/
+test-results/
+
+# Reports / artifacts
+allure-results/
+allure-report/
+_reports/
+_package_for_gpt/
+_global_final_audit_pack/
+_global_final_audit_remediation_pack/
+GPT_*
+CDP_VERDICT_*
+COUNTS_MANIFEST_*
+VALIDATION_OUTPUT_*
+VALIDATION_ZIP_OUTPUT_*
+REGRESSION_OUTPUT_*
+PYTEST_OUTPUT_*
+IN_SCOPE_TEST_RESULTS_*
+SCOPE_DECLARATION_*
+RUN_ID*.txt
+*_OUTPUT_A*.txt
+*_REVIEW_OUTPUT*.md
+*_NUDGE_OUTPUT*.md
+
+# .aiworkflow session state (generated, not source)
+.aiworkflow/session/
+.ai/runs/
+.ai/reports/
+
+# Blackboard state (generated)
+.claude/blackboard/
+
+# Local browser/CDP profiles
+.chrome-cdp-profile*/
+.cdp-profile*/
+
+# Large files
+*.apk
+*.ipa
+*.zip
+*.mp4
+
+# Temporary
+*.tmp
+*.patch
+_check_cdp.py
+_nudge_*.py
+recapture_*.py
+search_*.py
+extract_*.py
+find_*.py
+merge_blocks.py
+integrate_*.py
+pack_a*_evidence.py
+nudge_a*.py
+ai-workflow-hub/pack_a*_evidence.py
+ai-workflow-hub/nudge_a*.py
+ai-workflow-hub/MagicMock/
+ai-workflow-hub/evidence/
+ai-workflow-hub/_*.py
+ai-workflow-hub/check_*.py
+ai-workflow-hub/read_*.py
+ai-workflow-hub/recover_cli.py
+ai-workflow-hub/recovered_sections.py
+ai-workflow-hub/scan_unicode.py
+ai-workflow-hub/cli_*.py
+ai-workflow-hub/test_emdash.py
+ai-workflow-hub/scripts/pack_a*.py
+ai-workflow-hub/scripts/validate_a*.py
+ai-workflow-hub/scripts/_fix_*.py
+ai-workflow-hub/tests/pack_a*_evidence.py
+ai-workflow-hub/tests/nudge_a*.py
+ai-workflow-hub/tests/validate_a*.py

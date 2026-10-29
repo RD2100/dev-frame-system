@@ -1,0 +1,62 @@
+id: m4-l2b-governance-matrix-markdown-nowrap
+title: Preserve governance matrix markdown lines in CLI output
+created_at: "2026-06-01T15:58:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Make the governance matrix markdown CLI output preserve full markdown lines
+  in the local terminal so reviewers can copy the output without Rich inserting
+  visual table breaks.
+
+problem_statement:
+  - "`aihub governance matrix --format markdown` works, but Rich currently wraps long markdown table rows at console width."
+  - "That wrapping makes the output less suitable for reviewer copy/paste even though the underlying markdown builder is correct."
+  - "We want a minimal CLI-only rendering fix without changing the markdown payload or any governance behavior."
+
+must_do:
+  - Preserve full markdown lines in the markdown CLI branch.
+  - Keep the markdown payload unchanged at the builder level unless required by the no-wrap fix.
+  - Keep default panel behavior unchanged.
+  - Add a focused regression test that would catch the wrapped-line behavior at the CLI render branch.
+  - Include a real-path verification command using `python -m ai_workflow_hub.cli governance matrix --format markdown`.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not change default panel rendering.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l2b-governance-matrix-markdown-nowrap.yaml
+  - .ai/runs/m4-l2b-governance-matrix-markdown-nowrap/**
+  - .ai/reports/2026-06-01-m4-l2b-governance-matrix-markdown-nowrap-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+
+token_budget_guidance:
+  - Read only the governance CLI branch and focused governance CLI tests unless blocked.
+  - Keep this slice to the no-wrap render fix and regression coverage only.
+
+acceptance_criteria:
+  - `aihub governance matrix --format markdown` preserves long markdown table rows on the local terminal path.
+  - Markdown branch remains read-only.
+  - Default panel output remains unchanged.
+  - Focused tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format markdown

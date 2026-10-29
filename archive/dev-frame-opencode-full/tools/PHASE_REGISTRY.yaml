@@ -1,0 +1,111 @@
+# Phase Registry v1 — Declarative stage graph for Oracle chain phase transitions.
+# This is the SINGLE SOURCE OF TRUTH for stage definitions.
+# Shadow mode: compared against current hardcoded logic; mismatches trigger fail-closed.
+
+registry_version: "1.0.0"
+registry_mode: shadow  # shadow | authoritative (future)
+production_promotion_default: forbidden  # must be explicitly allowed per stage
+
+stages:
+  s3:
+    expected_taskspec: S3_TASKSPEC.json
+    generator: generate_s3_taskspec
+    auto_dispatch: true
+    production_promotion_allowed: false
+    contract_freeze_approved_required: false
+    unknown_stage_policy: fail_closed
+    transitions:
+      accepted: execute_s3_frozen_taskspec
+      partial: s3_reconciliation
+      blocked: generate_reconciliation_plan
+      human_required: stop_and_wait_for_human
+
+  contract_freeze_review_preparation:
+    expected_taskspec: CONTRACT_FREEZE_REVIEW_PREPARATION_TASKSPEC.json
+    generator: generate_contract_freeze_review_preparation_taskspec
+    auto_dispatch: true
+    production_promotion_allowed: false
+    contract_freeze_approved_required: false
+    unknown_stage_policy: fail_closed
+    transitions:
+      accepted: contract_freeze_review
+      partial: generate_freeze_reconciliation_plan
+      blocked: generate_freeze_reconciliation_plan
+      human_required: stop_and_wait_for_human
+
+  contract_freeze_review:
+    expected_taskspec: CONTRACT_FREEZE_REVIEW_TASKSPEC.json
+    generator: generate_contract_freeze_review_taskspec
+    auto_dispatch: true
+    production_promotion_allowed: false
+    contract_freeze_approved_required: false
+    unknown_stage_policy: fail_closed
+    transitions:
+      accepted: record_contract_freeze_decision
+      partial: generate_freeze_reconciliation_plan
+      blocked: generate_freeze_reconciliation_plan
+      human_required: stop_and_wait_for_human
+
+  # Future stages — declared but not yet activated
+  record_contract_freeze_decision:
+    expected_taskspec: RECORD_CONTRACT_FREEZE_DECISION_TASKSPEC.json
+    generator: generate_record_contract_freeze_decision_taskspec
+    auto_dispatch: false  # requires explicit GPT acceptance before dispatch
+    production_promotion_allowed: false
+    contract_freeze_approved_required: true
+    unknown_stage_policy: fail_closed
+    transitions:
+      accepted: contract_freeze_finalize
+      partial: freeze_reconciliation
+      blocked: freeze_reconciliation
+      human_required: stop_and_wait_for_human
+
+  freeze_reconciliation_plan:
+    expected_taskspec: FREEZE_RECONCILIATION_PLAN_TASKSPEC.json
+    generator: generate_freeze_reconciliation_plan_taskspec
+    auto_dispatch: false
+    production_promotion_allowed: false
+    contract_freeze_approved_required: false
+    unknown_stage_policy: fail_closed
+    transitions:
+      accepted: contract_freeze_review  # retry freeze review
+      blocked: human_required
+      human_required: stop_and_wait_for_human
+
+  phase_registry_guarded_enforcement_v2_1_remediation:
+    expected_taskspec: PHASE_REGISTRY_GUARDED_ENFORCEMENT_V2_1_REMEDIATION_TASKSPEC.json
+    generator: generate_phase_registry_guarded_enforcement_v2_1_remediation_taskspec
+    auto_dispatch: true
+    production_promotion_allowed: false
+    contract_freeze_approved_required: false
+    unknown_stage_policy: fail_closed
+    transitions:
+      accepted: phase_registry_guarded_enforcement  # retry guarded enforcement after fix
+      partial: generate_reconciliation_plan
+      blocked: generate_reconciliation_plan
+      human_required: stop_and_wait_for_human
+
+  production_promotion_review:
+    expected_taskspec: PRODUCTION_PROMOTION_REVIEW_TASKSPEC.json
+    generator: generate_production_promotion_review_taskspec
+    auto_dispatch: false  # requires explicit human/GPT confirmation before dispatch
+    requires_human_confirmation: true  # production promotion ALWAYS requires human
+    production_promotion_allowed: false  # prototype: promotion not allowed until explicit authorization
+    contract_freeze_approved_required: true  # freeze must be approved first
+    unknown_stage_policy: fail_closed
+    transitions:
+      human_required: stop_and_wait_for_human  # default path: always human
+      accepted: production_promotion_execute  # only after explicit human approval
+
+# Global rules (applied to all stages unless overridden)
+global:
+  # priority order for business_decision resolution
+  decision_priority:
+    - human_required
+    - blocked
+    - partial
+    - accepted
+  # accepted + allow_next_stage=true MUST have explicit next_stage
+  require_explicit_next_stage_for_dispatch: true
+  # production_promotion defaults to forbidden
+  production_promotion_default: forbidden

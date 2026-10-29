@@ -1,0 +1,64 @@
+id: m4-g2-advanced-governance-cross-run
+title: Add cross-run assertions for advanced governance statuses
+created_at: "2026-06-01T02:40:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Extend advanced governance assertions from same-run to cross-run continuity.
+  We already verify that a single run can surface accepted_risk coherently.
+  This slice proves that a status written in one run and then reopened or
+  revisited in a later run stays coherent across prompt context, final-report,
+  and verification summary.
+
+problem_statement:
+  - "M4-G1 verifies one run end-to-end for accepted_risk."
+  - "We still lack a cross-run continuity assertion showing ledger state evolves coherently across runs."
+
+must_do:
+  - Add at least one focused cross-run test for an advanced governance status.
+  - The test must cover two synthetic runs under the same isolated ledger.
+  - It must assert, at minimum:
+    - first run writes an advanced governance status
+    - subsequent run reopens or revisits the same recurrence key
+    - prompt context reflects the new latest state correctly
+    - final-report in the later run reflects the updated governance summary correctly
+    - verify_run_evidence in the later run reflects the updated governance summary correctly
+  - Keep the slice deterministic and test-only if no production inconsistency is found.
+
+must_not_do:
+  - Do not add new runtime features unless the test reveals a real inconsistency.
+  - Do not touch src unless needed to fix a real failing cross-run behavior.
+  - Do not touch shell_runner.py, coding_graph.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - ai-workflow-hub/tests/test_issue_cli.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - .ai/tasks/2026-06-01-m4-g2-advanced-governance-cross-run.yaml
+  - .ai/runs/m4-g2-advanced-governance-cross-run/**
+  - .ai/reports/2026-06-01-m4-g2-advanced-governance-cross-run-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only existing governance-related test files unless blocked.
+  - Prefer one focused new cross-run test over several overlapping ones.
+
+acceptance_criteria:
+  - At least one advanced governance status has a cross-run continuity assertion.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_issue_ledger.py tests/test_issue_cli.py tests/test_reviewer_minimal_loop.py -q
+  - python -m pytest tests/ -q

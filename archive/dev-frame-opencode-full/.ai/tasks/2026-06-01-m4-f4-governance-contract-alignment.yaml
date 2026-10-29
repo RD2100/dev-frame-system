@@ -1,0 +1,60 @@
+id: m4-f4-governance-contract-alignment
+title: Align Issue Contract statuses with advanced governance statuses
+created_at: "2026-06-01T01:10:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Close the contract gap between runtime ledger statuses and validate_issues.
+  Advanced governance statuses already exist in VALID_STATUSES and can be
+  written through the ledger/CLI, but CONTRACT_VALID_STATUSES still rejects
+  them in structured artifact validation.
+
+problem_statement:
+  - "VALID_STATUSES includes accepted_risk, obsolete, closed, mitigated."
+  - "CONTRACT_VALID_STATUSES still only allows open, fixed, verified, wontfix."
+  - "This creates an inconsistency: advanced governance statuses can exist in ledger state but would fail validate_issues if emitted through structured artifacts."
+
+must_do:
+  - Extend Issue Contract validation to accept accepted_risk, obsolete, closed, and mitigated.
+  - Add focused tests proving validate_issues accepts these statuses.
+  - Add a focused artifact-ingestion test showing review or plan issues carrying one of these statuses can be normalized/loaded without contract failure.
+  - Keep the change limited to contract alignment; do not widen other governance semantics.
+
+must_not_do:
+  - Do not change blocking semantics.
+  - Do not add new CLI commands.
+  - Do not change coding_graph, shell_runner, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - .ai/tasks/2026-06-01-m4-f4-governance-contract-alignment.yaml
+  - .ai/runs/m4-f4-governance-contract-alignment/**
+  - .ai/reports/2026-06-01-m4-f4-governance-contract-alignment-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+
+token_budget_guidance:
+  - Read only issue_ledger.py and the directly relevant tests unless blocked.
+  - Keep this slice to contract validation and artifact ingestion only.
+
+acceptance_criteria:
+  - validate_issues accepts accepted_risk, obsolete, closed, and mitigated.
+  - structured artifact issue loading works with at least one advanced governance status.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_issue_ledger.py tests/test_reviewer_minimal_loop.py -q
+  - python -m pytest tests/ -q

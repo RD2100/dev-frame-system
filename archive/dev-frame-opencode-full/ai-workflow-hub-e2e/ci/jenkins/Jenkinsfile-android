@@ -1,0 +1,37 @@
+pipeline {
+    agent { label 'android' }
+    environment {
+        ANDROID_HOME = '/opt/android-sdk'
+        WECHAT_DEVTOOL_PATH = '/opt/wechat-devtools/cli'
+    }
+    stages {
+        stage('Setup') {
+            steps {
+                sh 'bash ci/scripts/setup-env.sh'
+            }
+        }
+        stage('Smoke Test') {
+            steps {
+                sh 'python -m cli.main run --project=app-android --profile=smoke'
+            }
+        }
+        stage('Regression Test') {
+            when { branch 'main' }
+            steps {
+                sh 'python -m cli.main run --project=app-android --profile=regression'
+            }
+        }
+        stage('Report') {
+            steps {
+                sh 'python -m cli.main report --project=app-android'
+                allure includeProperties: false,
+                       results: [[path: 'reports/allure-results']]
+            }
+        }
+    }
+    post {
+        failure {
+            echo 'Pipeline failed, check logs.'
+        }
+    }
+}

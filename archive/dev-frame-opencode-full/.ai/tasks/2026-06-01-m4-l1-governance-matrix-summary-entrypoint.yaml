@@ -1,0 +1,62 @@
+id: m4-l1-governance-matrix-summary-entrypoint
+title: Add human-facing governance matrix summary entrypoint
+created_at: "2026-06-01T14:45:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Promote the governance matrix audit from a test-only artifact to a
+  human-facing read path. The summary should be callable from the CLI without
+  mutating any runtime state.
+
+problem_statement:
+  - "The governance coverage inventory exists, but it currently lives only in tests."
+  - "Humans can inspect it only by opening the test file or reading a generated report."
+  - "We want a small, explicit read entrypoint for current governance coverage."
+
+must_do:
+  - Extract the governance matrix inventory into a shared importable module under src or another stable shared location.
+  - Make the existing audit tests consume that shared inventory source.
+  - Add a human-facing CLI entrypoint to print the governance matrix summary.
+  - Keep the summary read-only and deterministic.
+  - Add focused tests for the new entrypoint.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l1-governance-matrix-summary-entrypoint.yaml
+  - .ai/runs/m4-l1-governance-matrix-summary-entrypoint/**
+  - .ai/reports/2026-06-01-m4-l1-governance-matrix-summary-entrypoint-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only the current governance matrix audit test, cli acceptance/report sections, and any new shared module unless blocked.
+  - Keep this slice to extraction + read-only CLI display only.
+
+acceptance_criteria:
+  - Governance matrix inventory is shared from a non-test module.
+  - There is a CLI command to show the governance matrix summary.
+  - Existing governance matrix audit tests still pass.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_governance_matrix_audit.py tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q

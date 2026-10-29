@@ -1,0 +1,49 @@
+# 质量门禁配置
+
+gates:
+  # PR 级别门禁（宽松）
+  pr:
+    min_evidence_count:
+      min: 1
+    smoke_pass_rate:
+      min: 100
+    crash_count:
+      max: 0
+    lint_errors:
+      max: 0
+    # task_spec_compliance:
+    #   min: 100   # enforce once adapter is stable
+
+  # Main 分支门禁（标准）
+  main:
+    min_evidence_count:
+      min: 5
+    smoke_pass_rate:
+      min: 100
+    regression_pass_rate:
+      min: 95
+    crash_count:
+      max: 0
+    critical_bugs:
+      max: 0
+    # task_spec_compliance:
+    #   min: 100   # enforce once adapter is stable
+
+  # 发版门禁（严格）
+  release:
+    min_evidence_count:
+      min: 10
+    smoke_pass_rate:
+      min: 100
+    regression_pass_rate:
+      min: 98
+    compatibility_pass_rate:
+      min: 90
+    crash_free_rate:
+      min: 99.5
+    performance_regression_count:
+      max: 0
+    security_critical_count:
+      max: 0
+    # task_spec_compliance:
+    #   min: 100   # enforce once adapter is stable

@@ -1,0 +1,70 @@
+id: m4-f1-governance-status-visibility
+title: Add deterministic visibility semantics for advanced governance statuses
+created_at: "2026-06-01T00:10:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Land the first minimal complex-governance slice by giving existing advanced
+  ledger statuses deterministic visibility semantics. The system already
+  accepts accepted_risk, closed, obsolete, and mitigated, but prompt context
+  and final-report handling do not treat them explicitly.
+
+problem_statement:
+  - "VALID_STATUSES already includes accepted_risk, obsolete, closed, mitigated."
+  - "build_prompt_context currently only special-cases verified, fixed, and wontfix."
+  - "final-report ledger summary currently counts only open / verified / wontfix."
+  - "Without explicit deterministic semantics, these statuses exist in schema but not in workflow behavior."
+
+must_do:
+  - Define prompt-visibility semantics for accepted_risk, closed, obsolete, and mitigated.
+  - Keep the first slice conservative:
+    - accepted_risk should be excluded from prompt context by default
+    - closed should be excluded from prompt context
+    - obsolete should be excluded from prompt context
+    - mitigated should be excluded from prompt context
+  - Extend ledger_summary to report counts for these advanced statuses.
+  - Extend final-report Issue Ledger section to show these counts.
+  - Add focused tests for prompt-context filtering and ledger summary counts.
+
+must_not_do:
+  - Do not add new CLI transition commands.
+  - Do not change blocking semantics for open/fixed/wontfix/human_override.
+  - Do not change reviewer or plan_auditor routing.
+  - Do not edit cli.py, shell_runner.py, coding_graph.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - .ai/tasks/2026-06-01-m4-f1-governance-status-visibility.yaml
+  - .ai/runs/m4-f1-governance-status-visibility/**
+  - .ai/reports/2026-06-01-m4-f1-governance-status-visibility-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only issue_ledger.py, finalizer.py, and directly relevant tests unless blocked.
+  - Keep this slice to deterministic visibility and summary behavior only.
+
+acceptance_criteria:
+  - accepted_risk, closed, obsolete, mitigated are excluded from prompt context.
+  - ledger_summary reports counts for these statuses.
+  - final-report Issue Ledger section shows these new counts.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_issue_ledger.py tests/test_reviewer_minimal_loop.py -q
+  - python -m pytest tests/ -q

@@ -1,0 +1,54 @@
+id: m4-f2b-issues-cli-command-registration
+title: Fix governance issue CLI command registration and help coverage
+created_at: "2026-06-01T00:40:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Fix the M4-F2 CLI registration bug found in independent review: issue
+  commands accept-risk, mitigate, obsolete, and reopen must be registered at
+  the issue_app level, not nested inside issue_close.
+
+problem_statement:
+  - "Independent review shows `python -m ai_workflow_hub.cli issue --help` only lists import/list/verify/close."
+  - "In cli.py, later issue command decorators are indented under issue_close, so Typer never registers them."
+
+must_do:
+  - Move issue reopen / accept-risk / mitigate / obsolete to top-level issue_app command registration scope.
+  - Add focused CLI tests that assert these commands appear in `aihub issue --help`.
+  - Re-run focused CLI tests and broader tests.
+
+must_not_do:
+  - Do not change transition semantics themselves.
+  - Do not change issue_ledger logic.
+  - Do not touch coding_graph.py, reviewer.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_issue_cli.py
+  - .ai/tasks/2026-06-01-m4-f2b-issues-cli-command-registration.yaml
+  - .ai/runs/m4-f2b-issues-cli-command-registration/**
+  - .ai/reports/2026-06-01-m4-f2b-issues-cli-command-registration-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+
+token_budget_guidance:
+  - Read only cli.py issue section and test_issue_cli.py unless blocked.
+  - Keep the fix to registration scope and help coverage only.
+
+acceptance_criteria:
+  - `aihub issue --help` lists reopen, accept-risk, mitigate, and obsolete.
+  - Focused CLI tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_issue_cli.py -q
+  - python -m pytest tests/ -q

@@ -1,0 +1,47 @@
+# Android 崩溃归因规则
+
+rules:
+  - id: "crash-null-pointer"
+    pattern: "NullPointerException"
+    source: [stacktrace, logcat]
+    attribution:
+      root_cause: "空指针异常"
+      likely_module: "栈顶类所在模块"
+      severity: "P0"
+      suggestion: "检查对象初始化，添加null安全保护（Kotlin ?. 或 Java @Nullable）"
+
+  - id: "crash-oom"
+    pattern: "OutOfMemoryError"
+    source: [stacktrace, logcat]
+    attribution:
+      root_cause: "内存溢出"
+      likely_module: "当前Activity/Fragment"
+      severity: "P0"
+      suggestion: "检查大图片加载回收、内存泄漏(LeakCanary)、大对象创建"
+
+  - id: "crash-class-not-found"
+    pattern: "ClassNotFoundException|NoClassDefFoundError"
+    source: [stacktrace]
+    attribution:
+      root_cause: "类找不到"
+      likely_module: "依赖缺失的模块"
+      severity: "P0"
+      suggestion: "检查ProGuard/R8混淆规则、MultiDex配置、动态加载的类"
+
+  - id: "crash-anr"
+    pattern: "ANR|Application Not Responding"
+    source: [logcat, stacktrace]
+    attribution:
+      root_cause: "主线程阻塞(ANR)"
+      likely_module: "主线程代码"
+      severity: "P0"
+      suggestion: "检查主线程IO操作、长时间计算，移到后台线程"
+
+  - id: "crash-illegal-state"
+    pattern: "IllegalStateException|IllegalArgumentException"
+    source: [stacktrace]
+    attribution:
+      root_cause: "非法状态/参数异常"
+      likely_module: "调用链中的组件"
+      severity: "P1"
+      suggestion: "检查状态流转合法性、参数校验、Fragment事务时机"

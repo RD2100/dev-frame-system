@@ -1,0 +1,75 @@
+id: 2026-05-31-go-fix-dispatch-issues
+mode: edit
+profile: ai-dev
+title: Fix @go/OpenCode dispatch issues after project rename
+description: |
+  Fix the confirmed @go/OpenCode dispatch issues with minimal targeted changes.
+  Preserve existing unrelated dirty files and do not modify task queue history or
+  smoke reports.
+
+  Required fixes:
+  1. Update ai-workflow-hub/projects.yaml project paths from the old
+     D:\devFrame root to the actual D:\dev-frame-opencode root.
+  2. Fix workflows/coding_graph.py so fix_node guard checks and marks the same
+     logical fixer round. The second and later fixer rounds must not be skipped.
+  3. Tighten dry-run/apply boundary in executor.py and fixer.py so OpenCode is
+     called only when apply_changes is true.
+  4. Add/adjust default forbidden shell patterns in configs/execution-policy.yaml
+     for generic Windows shell metacharacters that can chain commands.
+  5. Integrate verify_run_evidence() into the _execute_run completion path so
+     run/go workflows record evidence verification after chain-evidence is
+     written. Avoid recursive verification issues and keep final state/report
+     consistent.
+  6. Add focused tests in ai-workflow-hub/tests/test_go_dispatch.py covering:
+     - multi-round fix loop through compile_graph().invoke()
+     - dry_run=False/apply_changes=False does not call opencode
+     - project path validation succeeds for renamed workspace
+     - evidence verification is called or recorded by _execute_run/go path if
+       safely testable without spawning real OpenCode
+
+  Constraints:
+  - Do not edit ai-workflow-hub/tasks.yaml.
+  - Do not edit smoke_report.txt.
+  - Do not delete or weaken existing tests.
+  - Keep changes small and in the style of existing code.
+  - If a listed test is impractical, document why in the result report and add
+    the closest lower-risk test.
+allow_read:
+  - AGENTS.md
+  - .ai/reports/2026-05-31-go-investigate-dispatch-issues-result.md
+  - ai-workflow-hub/projects.yaml
+  - ai-workflow-hub-e2e/.aiworkflow.yaml
+  - ai-workflow-hub/configs/execution-policy.yaml
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/project_registry.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/executor.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/fixer.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/tester.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_e2e_pipeline.py
+allow_write:
+  - ai-workflow-hub/projects.yaml
+  - ai-workflow-hub-e2e/.aiworkflow.yaml
+  - ai-workflow-hub/configs/execution-policy.yaml
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/executor.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/fixer.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/reports/2026-05-31-go-fix-dispatch-issues-result.md
+deny_write:
+  - "**/.env"
+  - "**/.env.*"
+  - "**/secrets/**"
+  - "**/node_modules/**"
+  - "**/.git/**"
+  - "ai-workflow-hub/tasks.yaml"
+  - "smoke_report.txt"
+verify:
+  - cd ai-workflow-hub; python -m pytest tests/test_go_dispatch.py -q
+  - cd ai-workflow-hub; python -m pytest tests/test_go_dispatch.py tests/test_e2e_pipeline.py tests/test_stage3b_idempotency.py tests/test_batch_retry.py -q
+expected_output:
+  report: .ai/reports/2026-05-31-go-fix-dispatch-issues-result.md

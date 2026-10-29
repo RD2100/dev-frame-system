@@ -1,0 +1,67 @@
+id: m4-f6-governance-summary-contract-freeze
+title: Freeze governance summary labels and order as shared contract
+created_at: "2026-06-01T01:45:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Eliminate governance summary drift by defining one shared label/order
+  contract that is reused by final-report, run_show, and run_verify. This is a
+  display/contract freeze only, not a new governance rule.
+
+problem_statement:
+  - "The same governance summary labels/order are currently hardcoded in multiple places."
+  - "That duplication makes future drift likely even though the semantics are already aligned today."
+
+must_do:
+  - Introduce a shared deterministic governance summary contract:
+    - ordered field list
+    - display labels
+  - Reuse that contract from:
+    - finalizer ISSUE LEDGER section
+    - run_show governance summary
+    - run_verify governance summary
+  - Keep output text materially unchanged.
+  - Add focused tests that guard the shared ordering/labels.
+
+must_not_do:
+  - Do not change blocking semantics.
+  - Do not change governance counts.
+  - Do not add new CLI commands.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - .ai/tasks/2026-06-01-m4-f6-governance-summary-contract-freeze.yaml
+  - .ai/runs/m4-f6-governance-summary-contract-freeze/**
+  - .ai/reports/2026-06-01-m4-f6-governance-summary-contract-freeze-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only issue_ledger.py, finalizer.py, cli.py governance display sections, and directly relevant tests unless blocked.
+  - Keep this slice to shared contract extraction only.
+
+acceptance_criteria:
+  - governance summary labels/order come from one shared source.
+  - run_show, run_verify, and final-report still display the same counts and labels.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_issue_ledger.py tests/test_reviewer_minimal_loop.py -q
+  - python -m pytest tests/ -q

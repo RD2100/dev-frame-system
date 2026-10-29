@@ -1,0 +1,75 @@
+id: review-pack-flow-helper
+title: Add local review evidence pack helper
+created_at: "2026-06-03T23:35:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Add a small local helper that reduces repeated Codex effort when preparing
+  GPT review evidence packs by generating a manifest, zip archive, and machine
+  validation result for an existing report directory.
+
+problem_statement:
+  - Current conversation-authorization review work repeats the same local steps:
+    manifest generation, zip packaging, zip/manifest validation, and concise
+    status reporting.
+  - Repetition increases token usage and increases the chance of a mechanical
+    evidence-pack mistake.
+  - The helper must not submit to GPT, interact with browsers, execute real-chain
+    tests, or make authorization decisions.
+
+must_do:
+  - Add `tools/review_pack_flow.py`.
+  - Support a command that takes a report directory, task id, review run id, and
+    output zip name.
+  - Generate or update `PACK_MANIFEST.md`.
+  - Generate the requested zip archive.
+  - Verify manifest file paths against zip entries.
+  - Verify SHA256 hashes for non-self-referential files.
+  - Write `VALIDATION_RESULT.json` with machine-readable pass/fail fields.
+  - Print a concise status summary suitable for Codex to relay.
+  - Add focused pytest coverage using a temporary directory.
+
+must_not_do:
+  - Do not submit anything to GPT.
+  - Do not connect to Chrome CDP or any browser.
+  - Do not modify `tools/oracle_gpt_full_review_flow.py`.
+  - Do not modify `tools/oracle_gpt_reply_monitor.py`.
+  - Do not modify `tools/gpt_conversation_guard.py`.
+  - Do not run real-chain tests.
+  - Do not edit or delete historical evidence directories.
+  - Do not change production, driver, guard, or cleanup behavior.
+
+allow_write:
+  - tools/review_pack_flow.py
+  - tools/test_review_pack_flow.py
+  - .ai/tasks/2026-06-03-review-pack-flow-helper.yaml
+  - .ai/runs/review-pack-flow-helper/**
+  - .ai/reports/2026-06-03-review-pack-flow-helper-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - tools/oracle_gpt_full_review_flow.py
+  - tools/oracle_gpt_reply_monitor.py
+  - tools/gpt_conversation_guard.py
+  - _reports/conversation-authorization/**
+  - smoke_report.txt
+  - ai-workflow-hub/**
+  - ai-workflow-hub-e2e/**
+  - codegraph/**
+
+acceptance_criteria:
+  - `python tools/review_pack_flow.py --help` exits 0.
+  - Focused pytest coverage passes.
+  - A temporary fixture pack produces `PACK_MANIFEST.md`, zip, and
+    `VALIDATION_RESULT.json`.
+  - The helper fails closed when manifest and zip disagree.
+  - The final report states that no GPT submission or real-chain execution was
+    performed.
+
+suggested_test_commands:
+  - python -m pytest tools/test_review_pack_flow.py -q

@@ -1,0 +1,10 @@
+# TestFrame Python 依赖
+click>=8.0
+pyyaml>=6.0
+requests>=2.28
+
+# 可选: 各工具依赖 (按需安装)
+# airtest        # Android图像+控件自动化
+# pocoui         # Poco控件识别
+# allure-pytest  # Allure集成
+# playwright     # 需要 npm install playwright

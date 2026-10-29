@@ -1,0 +1,25 @@
+# 微信小程序项目配置示例
+project:
+  name: "my-miniapp"
+  app_id: "wx1234567890"
+  project_path: "./miniprogram/"
+
+stages:
+  - stage: smoke
+    tools: [miniprogram-automator]
+    timeout: 300
+    retry: 1
+    on_failure: abort
+
+miniapp:
+  devtool_path: "${WECHAT_DEVTOOL_PATH}"
+  devtool_port: 9420
+  test_dir: "tests/miniapp/specs/"
+
+bugly:
+  miniapp_app_id: "${BUGLY_MINIAPP_APP_ID}"
+
+report:
+  format: "allure"
+  results_dir: "reports/allure-results/"
+  html_dir: "reports/allure-report/"

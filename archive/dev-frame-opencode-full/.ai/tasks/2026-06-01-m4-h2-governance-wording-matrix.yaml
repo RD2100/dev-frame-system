@@ -1,0 +1,58 @@
+id: m4-h2-governance-wording-matrix
+title: Add wording matrix assertions for blocked human_required and failed runs
+created_at: "2026-06-01T11:10:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Add a focused wording matrix for governance-aware reporting in blocked,
+  human_required, and failed runs. The goal is not new behavior, but ensuring
+  final-report, failure-analysis, and run recover remain self-consistent in
+  those terminal states.
+
+problem_statement:
+  - "We already expose governance summary in final-report, run_show, run_verify, and recovery output."
+  - "What remains weak is matrix-style coverage for different terminal states with governance context present."
+
+must_do:
+  - Add focused tests for blocked, human_required, and failed terminal states.
+  - For each relevant state, assert that the generated report/recovery text still contains:
+    - the expected status wording
+    - governance summary block
+    - non-contradictory next-step wording
+  - Prefer reusing existing helper paths (`build_failure_analysis`, `analyze_recovery`, `run_recover`) over broad new harnesses.
+  - Keep this slice test-only unless the tests reveal a real inconsistency.
+
+must_not_do:
+  - Do not add new runtime features unless a real inconsistency is exposed.
+  - Do not touch issue_ledger.py, shell_runner.py, coding_graph.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-h2-governance-wording-matrix.yaml
+  - .ai/runs/m4-h2-governance-wording-matrix/**
+  - .ai/reports/2026-06-01-m4-h2-governance-wording-matrix-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only existing governance-related test files unless blocked.
+  - Keep this slice to test additions unless a real contradiction forces code change.
+
+acceptance_criteria:
+  - There is matrix coverage for blocked, human_required, and failed wording with governance summary present.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_reviewer_minimal_loop.py tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q

@@ -1,0 +1,62 @@
+id: m4-l2-governance-matrix-markdown-summary
+title: Add reviewer-friendly markdown summary for governance matrix
+created_at: "2026-06-01T15:40:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Add a human-friendly Markdown read format for the governance matrix so
+  reviewers can copy, read, and compare the coverage map without depending on
+  Rich panel rendering.
+
+problem_statement:
+  - "The governance matrix is now available via a shared module and CLI panel output."
+  - "The current panel output is good for terminal viewing, but less convenient for reviewer notes and text-based comparison."
+  - "We want a deterministic, read-only markdown summary without changing any governance behavior."
+
+must_do:
+  - Add a shared builder for a deterministic markdown summary of the governance matrix.
+  - Expose that summary via the existing governance CLI entrypoint using an explicit read-only format selector.
+  - Keep the existing default panel behavior intact unless the format selector is used.
+  - Add focused tests for the markdown builder and the CLI markdown mode.
+  - Include at least one real-path verification command using `python -m ai_workflow_hub.cli governance matrix --format markdown`.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not mutate files or runtime state from the governance command.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l2-governance-matrix-markdown-summary.yaml
+  - .ai/runs/m4-l2-governance-matrix-markdown-summary/**
+  - .ai/reports/2026-06-01-m4-l2-governance-matrix-markdown-summary-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only governance_matrix.py, the governance CLI snippet, and focused governance CLI tests unless blocked.
+  - Keep this slice to markdown summary generation + CLI selection + focused tests only.
+
+acceptance_criteria:
+  - Governance matrix shared module exposes a deterministic markdown summary builder.
+  - `aihub governance matrix --format markdown` prints the markdown summary.
+  - Default `aihub governance matrix` panel behavior remains intact.
+  - Focused tests pass and the real-path markdown command succeeds.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format markdown

@@ -1,0 +1,35 @@
+id: 2026-05-31-go-opencode-audit
+mode: read
+profile: ai-dev
+title: Audit @go to OpenCode dispatch integration
+description: |
+  Review the current ai-workflow-hub changes that add @go/TaskSpec dispatch to
+  the OpenCode-backed pipeline. Focus on correctness, evidence integrity,
+  project path/config risks, safety-report integration, dry-run/apply behavior,
+  and test coverage. Do not modify production code. Write a concise audit report
+  with findings, severity, evidence paths, and recommended fixes.
+allow_read:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/task_spec_adapter.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/executor.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/fixer.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/evidence.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/git_utils.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/projects.yaml
+  - ai-workflow-hub/tasks.yaml
+allow_write:
+  - .ai/reports/2026-05-31-go-opencode-audit-result.md
+deny_write:
+  - "**/.env"
+  - "**/.env.*"
+  - "**/secrets/**"
+  - "**/node_modules/**"
+  - "**/.git/**"
+verify:
+  - git status --porcelain=v1
+expected_output:
+  report: .ai/reports/2026-05-31-go-opencode-audit-result.md

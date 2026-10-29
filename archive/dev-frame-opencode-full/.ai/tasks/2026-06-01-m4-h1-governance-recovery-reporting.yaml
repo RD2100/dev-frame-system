@@ -1,0 +1,63 @@
+id: m4-h1-governance-recovery-reporting
+title: Add governance summary to failure analysis and recovery output
+created_at: "2026-06-01T10:35:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Improve edge-case reporting consistency by surfacing governance summary in
+  failure-analysis and recovery suggestions for blocked / human_required /
+  failed runs. Keep it deterministic and display-only.
+
+problem_statement:
+  - "final-report, run_show, and run_verify now expose governance summary."
+  - "failure-analysis.md and run recover suggestions still explain blocked/human_required/failed runs without that governance context."
+
+must_do:
+  - Add governance summary to failure-analysis output.
+  - Add governance summary to analyze_recovery output or its rendered CLI display path.
+  - Keep the new content deterministic and read-only.
+  - Add focused tests for:
+    - failure-analysis includes governance counts
+    - recovery output includes governance counts or labels
+  - Keep the slice display-only; no change to blocking decisions.
+
+must_not_do:
+  - Do not change blocking semantics.
+  - Do not add new CLI commands.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/src/ai_workflow_hub/recover.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-h1-governance-recovery-reporting.yaml
+  - .ai/runs/m4-h1-governance-recovery-reporting/**
+  - .ai/reports/2026-06-01-m4-h1-governance-recovery-reporting-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+
+token_budget_guidance:
+  - Read only finalizer.py failure-analysis section, recover.py, cli.py recover command, and directly relevant tests unless blocked.
+  - Keep the slice to display/reporting only.
+
+acceptance_criteria:
+  - failure-analysis includes governance summary.
+  - recovery output includes governance summary.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_reviewer_minimal_loop.py tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q
