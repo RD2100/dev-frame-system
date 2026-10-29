@@ -1,0 +1,17 @@
+# 冒烟测试 Profile
+profile: smoke
+description: "快速冒烟测试，覆盖核心用户路径"
+
+stages:
+  - smoke
+  - evidence
+  - report
+  - attribution
+  - gate
+
+gate_profile: pr
+
+parallel:
+  enabled: true
+  cross_tool: true
+  max_workers: 4

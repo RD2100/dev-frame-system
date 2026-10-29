@@ -1,0 +1,7 @@
+# MeterSphere 配置
+metersphere:
+  base_url: "http://localhost:8081"
+  api_key: "${MS_API_KEY}"
+  access_key: "${MS_ACCESS_KEY}"
+  timeout: 600
+  poll_interval: 10

@@ -1,0 +1,18 @@
+appId: com.example.app
+---
+- launchApp
+- assertVisible: "欢迎使用"
+- takeScreenshot: screenshots/welcome
+- tapOn: "登录"
+- assertVisible: "手机号登录"
+- tapOn:
+    id: "com.example.app:id/et_phone"
+- inputText: "13800138000"
+- tapOn: "获取验证码"
+- tapOn:
+    id: "com.example.app:id/et_code"
+- inputText: "123456"
+- tapOn:
+    id: "com.example.app:id/btn_login"
+- assertVisible: "首页"
+- takeScreenshot: screenshots/home

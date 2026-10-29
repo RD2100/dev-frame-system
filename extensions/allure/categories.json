@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Product defects",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*NullPointerException.*|.*OutOfMemoryError.*|.*IllegalStateException.*"
+  },
+  {
+    "name": "Test defects",
+    "matchedStatuses": ["broken"],
+    "messageRegex": ".*timeout.*|.*not found.*|.*not exist.*"
+  },
+  {
+    "name": "Network issues",
+    "matchedStatuses": ["failed", "broken"],
+    "messageRegex": ".*SocketTimeout.*|.*ConnectException.*|.*SSLException.*|.*UnknownHost.*"
+  },
+  {
+    "name": "API errors",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*5\\d\\d.*|.*4\\d\\d.*"
+  }
+]

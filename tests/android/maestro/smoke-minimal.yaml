@@ -1,0 +1,5 @@
+# Minimal proof: launch + screenshot
+appId: com.android.settings
+---
+- launchApp
+- takeScreenshot: reports/android/settings.png

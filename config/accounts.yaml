@@ -1,0 +1,22 @@
+# 测试账号池
+accounts:
+  # Android App 账号
+  android:
+    - phone: "13800138000"
+      code: "123456"
+      role: "normal_user"
+    - phone: "13800138001"
+      code: "123456"
+      role: "vip_user"
+
+  # 小程序账号
+  miniapp:
+    - openid: "test_openid_001"
+      role: "normal_user"
+
+  # API 账号
+  api:
+    - username: "testuser"
+      password: "${TEST_USER_PASSWORD}"
+      token: "${TEST_USER_TOKEN}"
+      role: "normal_user"

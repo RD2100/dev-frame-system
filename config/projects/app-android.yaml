@@ -1,0 +1,59 @@
+# Android App 项目配置示例
+project:
+  name: "my-android-app"
+  package: "com.example.app"
+  apk_path: "./build/outputs/apk/debug/app-debug.apk"
+
+stages:
+  - stage: smoke
+    tools: [maestro]
+    timeout: 300
+    retry: 1
+    parallel: false
+    on_failure: abort
+
+  - stage: regression
+    tools: [airtest]
+    timeout: 1800
+    retry: 2
+    parallel: true
+    on_failure: continue
+
+  - stage: compatibility
+    tools: [wetest]
+    timeout: 3600
+    retry: 0
+    parallel: false
+    on_failure: continue
+
+devices:
+  smoke: ["emulator-5554"]
+  regression: ["emulator-5554", "emulator-5556"]
+  compatibility: "wetest_pool:top20_androids"
+
+maestro:
+  flow_dir: "tests/android/maestro/"
+  format: "junit"
+
+airtest:
+  test_dir: "tests/android/airtest/"
+  device_uri: "Android:///"
+
+metersphere:
+  test_plan_id: ""
+  base_url: "http://localhost:8081"
+
+wetest:
+  device_pool: "top20_androids"
+
+sentry:
+  dsn: "${SENTRY_DSN}"
+  environment: "staging"
+
+bugly:
+  app_id: "${BUGLY_ANDROID_APP_ID}"
+
+report:
+  format: "allure"
+  results_dir: "reports/allure-results/"
+  html_dir: "reports/allure-report/"

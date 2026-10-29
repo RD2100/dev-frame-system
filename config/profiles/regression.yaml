@@ -1,0 +1,18 @@
+# 全量回归 Profile
+profile: regression
+description: "全量回归测试，覆盖所有功能"
+
+stages:
+  - smoke
+  - regression
+  - evidence
+  - report
+  - attribution
+  - gate
+
+gate_profile: main
+
+parallel:
+  enabled: true
+  cross_tool: true
+  max_workers: 4

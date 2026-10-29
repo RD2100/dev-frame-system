@@ -1,0 +1,76 @@
+name: Android Smoke Test
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'tests/android/**'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        api-level: [33]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup TestFrame environment
+        run: |
+          pip install -r requirements.txt
+          npm install
+
+      - name: Start Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          script: echo "Emulator ready"
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Run Smoke Tests
+        run: |
+          python -m cli.main run --project=app-android --profile=smoke
+        env:
+          WETEST_API_KEY: ${{ secrets.WETEST_API_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+
+      - name: Collect Test Evidence
+        if: always()
+        run: |
+          python -m cli.main watch --project=app-android
+
+      - name: Generate Allure Report
+        if: always()
+        uses: simple-elf/allure-report-action@v1
+        with:
+          allure_results: reports/allure-results
+          allure_report: reports/allure-report
+          allure_history: reports/allure-history
+
+      - name: Deploy Report to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: reports/allure-report
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          echo "❌ Android烟雾测试失败"
+          # 发送IM通知 (webhook)

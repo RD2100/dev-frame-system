@@ -1,0 +1,29 @@
+# 设备池配置
+emulators:
+  - id: "emulator-5554"
+    name: "Pixel_6_API_33"
+    type: "android_emulator"
+    os_version: "13"
+  - id: "emulator-5556"
+    name: "Pixel_5_API_30"
+    type: "android_emulator"
+    os_version: "11"
+
+wetest_pools:
+  top20_androids:
+    provider: "wetest"
+    count: 20
+    os: "android"
+    min_os_version: "10"
+    brands: ["华为", "小米", "OPPO", "vivo", "三星"]
+
+browserstack:
+  ios_safari:
+    provider: "browserstack"
+    devices: ["iPhone 14", "iPhone 15"]
+    os: "ios"
+
+playwright_devices:
+  - "Pixel 5"
+  - "iPhone 14"
+  - "iPad Pro"

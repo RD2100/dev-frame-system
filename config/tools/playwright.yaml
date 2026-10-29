@@ -1,0 +1,12 @@
+# Playwright 浏览器配置
+playwright:
+  browsers: [chromium, firefox, webkit]
+  devices:
+    - "Pixel 5"
+    - "iPhone 14"
+  base_url: ""
+  timeout: 30000
+  retries: 1
+  screenshot: "only_on_failure"
+  trace: "on_first_retry"
+  video: "off"

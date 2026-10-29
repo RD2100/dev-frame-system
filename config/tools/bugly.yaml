@@ -1,0 +1,5 @@
+# Bugly 配置
+bugly:
+  android_app_id: "${BUGLY_ANDROID_APP_ID}"
+  android_app_key: "${BUGLY_ANDROID_APP_KEY}"
+  miniapp_app_id: "${BUGLY_MINIAPP_APP_ID}"

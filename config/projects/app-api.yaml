@@ -1,0 +1,33 @@
+# 后端API项目配置示例
+project:
+  name: "my-api"
+  base_url: "https://api.example.com"
+  swagger_path: "./docs/swagger.json"
+
+stages:
+  - stage: smoke
+    tools: [metersphere]
+    timeout: 120
+    retry: 1
+    on_failure: abort
+
+  - stage: full
+    tools: [metersphere]
+    timeout: 600
+    retry: 2
+    on_failure: continue
+
+metersphere:
+  base_url: "http://localhost:8081"
+  api_key: "${MS_API_KEY}"
+  test_plan_smoke_id: ""
+  test_plan_full_id: ""
+
+apifox:
+  project_id: ""
+  mock_server: "https://mock.apifox.com/m1/xxx"
+
+report:
+  format: "allure"
+  results_dir: "reports/allure-results/"
+  html_dir: "reports/allure-report/"
