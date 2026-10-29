@@ -36,3 +36,7 @@
 
 - `agent-acceptance` → 仅 `history/agent-acceptance`
 - `dsh-devframe` → 仅 `history/dsh-devframe-reference` 与 `history/dsh-devframe-feat-20261027`
+
+## Push 备注（2026-10-29）
+
+部分 `history/*` 分支在 tip 上额外提交了一次 `memorial: strip .github/workflows…`，因为当前 `gh` OAuth token 缺少 `workflow` scope，无法推送含 Actions workflow 的 ref。源仓本身未改；完整含 workflow 的 tip 仍在已 Archive 的源仓中。
