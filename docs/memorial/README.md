@@ -24,3 +24,15 @@
 由 `git subtree add --squash` 抽入的全文树，与薄 `packages/` 并存。未抽入的大仓请直接 checkout 对应 `history/*` 分支浏览。
 
 方案依据：`MEMORIAL_MERGE_PLAN_2026-10-29`（本地分析报告）。合并执行日期：2026-10-29（Asia/Tokyo）。
+
+## 已抽入 main 的 archive/
+
+- `archive/test-frame-full/`
+- `archive/devframe-control-plane-full/`
+- `archive/dev-frame-opencode-full/`
+- `archive/devframe-system-full/`（超仓文档面；子模块目录可能为空 stub）
+
+**未做 subtree（体积过大 / TS 与 Python 根冲突风险）：**
+
+- `agent-acceptance` → 仅 `history/agent-acceptance`
+- `dsh-devframe` → 仅 `history/dsh-devframe-reference` 与 `history/dsh-devframe-feat-20261027`
