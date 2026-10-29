@@ -1,3 +1,8 @@
+> **MEMORIAL ONLY / 纪念仓**  
+> 本仓库是 DevFrame 谱系的历史纪念整合树，**不是**可运行编码内核，也不是日常开发主线。  
+> 活跃写表面：`rd-shadow`、`dsh-plugin-suite-by-rd`（勿与本仓混淆）。  
+> 源仓全文见分支 `history/*`；说明见 [`docs/memorial/README.md`](docs/memorial/README.md)。
+
 <p align="center">
   <img src="docs/assets/devframe-system-banner.svg" alt="devframe-system: web AI as an external brain" width="100%" />
 </p>
