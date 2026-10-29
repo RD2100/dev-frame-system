@@ -1,0 +1,64 @@
+id: m4-b1b-plan-auditor-overlap-ownership
+title: Fix forbidden pattern overlap semantics and plan artifact ownership tests
+created_at: "2026-05-31T22:40:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Close the two gaps found in independent review of M4-B1:
+  forbidden_files overlap must respect simple path-pattern semantics instead of
+  exact string intersection only, and plan-review artifact ownership must be
+  covered by tests so executor/fixer cannot claim those outputs.
+
+problem_statement:
+  - "M4-B1 forbidden overlap currently uses exact set intersection."
+  - "This misses common patterns like secrets/** and tests/**."
+  - "The M4-B1 review also found missing ownership regression coverage for plan-review.md and plan-issues.json."
+
+must_do:
+  - Make plan_auditor forbidden overlap recognize simple path-pattern matches used elsewhere in the project, at minimum exact file, prefix directory, and glob-like /** suffix patterns.
+  - Keep the implementation deterministic and narrow; do not introduce a complex matcher framework.
+  - Restore or add a test showing secrets/** blocks an allowed file under secrets/.
+  - Add ownership tests proving executor/fixer do not write plan-review.md or plan-issues.json.
+  - Keep graph placement and plan_auditor semantics unchanged otherwise.
+
+must_not_do:
+  - Do not broaden M4-B1 into model-backed plan auditing.
+  - Do not change reviewer semantics.
+  - Do not touch cli.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/plan_auditor.py
+  - ai-workflow-hub/tests/test_plan_auditor.py
+  - ai-workflow-hub/tests/test_model_reviewer_backend.py
+  - .ai/tasks/2026-05-31-m4-b1b-plan-auditor-overlap-ownership.yaml
+  - .ai/runs/m4-b1b-plan-auditor-overlap-ownership/**
+  - .ai/reports/2026-05-31-m4-b1b-plan-auditor-overlap-ownership-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+
+token_budget_guidance:
+  - Read only plan_auditor.py and the directly relevant tests unless blocked.
+  - Keep the matcher small and local.
+  - Reuse existing executor/fixer ownership test style rather than inventing a new harness.
+
+acceptance_criteria:
+  - An allowed file under secrets/ is blocked when forbidden_files contains secrets/**.
+  - Existing exact-match overlap behavior still works.
+  - Executor/fixer ownership tests cover plan-review.md and plan-issues.json.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_plan_auditor.py tests/test_model_reviewer_backend.py -q
+  - python -m pytest tests/ -q

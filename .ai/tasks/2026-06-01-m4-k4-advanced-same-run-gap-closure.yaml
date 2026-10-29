@@ -1,0 +1,58 @@
+id: m4-k4-advanced-same-run-gap-closure
+title: Close mitigated and obsolete same-run governance gaps
+created_at: "2026-06-01T14:10:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Close the last two explicit governance matrix gaps recorded in the audit:
+  add dedicated same-run assertions for mitigated and obsolete, then update
+  the inventory to reflect full coverage.
+
+problem_statement:
+  - "M4-K2/M4-K3 inventory still documents two deliberate gaps:"
+  - "advanced_governance_cross_run/mitigated_same_run"
+  - "advanced_governance_cross_run/obsolete_same_run"
+  - "Cross-run coverage exists, but same-run chain assertions are still missing."
+
+must_do:
+  - Add dedicated same-run governance chain assertions for mitigated and obsolete.
+  - Reuse the accepted_risk same-run pattern where possible.
+  - Update the governance matrix audit inventory to remove both gaps and record the new coverage.
+  - Keep the slice test-only unless a real inconsistency is exposed.
+
+must_not_do:
+  - Do not add new runtime behavior.
+  - Do not touch src/**.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - .ai/tasks/2026-06-01-m4-k4-advanced-same-run-gap-closure.yaml
+  - .ai/runs/m4-k4-advanced-same-run-gap-closure/**
+  - .ai/reports/2026-06-01-m4-k4-advanced-same-run-gap-closure-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only test_go_dispatch.py and test_governance_matrix_audit.py unless blocked.
+  - Prefer extending existing helpers/matrix patterns over creating a new harness.
+
+acceptance_criteria:
+  - mitigated_same_run and obsolete_same_run have dedicated same-run governance chain coverage.
+  - governance matrix audit no longer records these two gaps.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_governance_matrix_audit.py -q
+  - python -m pytest tests/ -q

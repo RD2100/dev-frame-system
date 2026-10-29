@@ -1,0 +1,104 @@
+id: m4-a1-harden-model-reviewer-parser
+title: Harden real model reviewer backend and parser
+created_at: "2026-05-31T00:00:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Fix the real model reviewer smoke issues without broadening governance:
+  Windows opencode execution must resolve a runnable executable, and
+  parse_model_review() must keep JSON-first behavior while adding a narrow,
+  explicit Markdown fallback for real reviewer outputs.
+
+problem_statement:
+  - "Problem 1: default reviewer backend can resolve extensionless opencode on Windows, then Popen fails with WinError 2."
+  - "Problem 2: real model output was a Markdown review report, not Issue Contract v0 JSON, so JSON-first parser fail-closed."
+  - "Non-problem: fail-closed P0 parse issue behavior is correct and must remain."
+
+must_do:
+  - Copy minimal stable smoke samples into tests/fixtures/model_reviewer/.
+  - Do not make tests depend on mutable .ai/runs paths.
+  - Fix Windows opencode executable resolution so detection and execution use the same runnable path.
+  - Prefer opencode.cmd, then opencode.exe, then opencode on Windows.
+  - If a .cmd path still fails under direct Popen, allow cmd.exe /c wrapper only for that execution path.
+  - Keep JSON-first parsing order unchanged.
+  - Strengthen model reviewer prompt to demand JSON-only output and [] for no issues.
+  - Add a narrow Markdown fallback parser after JSON-first fails.
+  - Only parse Markdown findings when severity and finding structure are explicit.
+  - Treat explicit no issues / no findings / LGTM / no blocking issues as [].
+  - If Markdown output is ambiguous, fail closed with a P0 parse issue.
+  - Mark Markdown fallback findings through evidence with parser=markdown_fallback.
+  - Ensure parsed Markdown candidates still go through validate_issues(), normalize_issue(), deterministic artifact writing, and Ledger merge.
+  - Preserve existing P0 parse issue behavior when parsing fails.
+  - Re-run the controlled real model reviewer smoke after implementation.
+
+must_not_do:
+  - Do not change Issue Contract v0.
+  - Do not change Ledger merge semantics.
+  - Do not change finalizer blocking rules.
+  - Do not let model output directly write authoritative review artifacts.
+  - Do not implement plan_auditor.
+  - Do not implement aihub issues CLI.
+  - Do not implement complex governance strategy.
+  - Do not broaden the parser into a general Markdown understanding engine.
+  - Do not silently pass ordinary summary text without explicit no-issue wording.
+  - Do not edit ai-workflow-hub/tasks.yaml.
+  - Do not edit ai-workflow-hub-e2e files.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/opencode_client.py
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+  - ai-workflow-hub/tests/test_model_reviewer_backend.py
+  - ai-workflow-hub/tests/fixtures/model_reviewer/**
+  - .ai/tasks/2026-05-31-m4-a1-harden-model-reviewer-parser.yaml
+  - .ai/runs/m4-a1-harden-model-reviewer-parser/**
+  - .ai/reports/2026-05-31-m4-a1-harden-model-reviewer-parser-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+
+parser_order:
+  - fenced JSON array or object
+  - raw JSON array
+  - raw {"issues":[...]}
+  - narrow Markdown fallback
+  - P0 parse issue
+
+markdown_fallback_constraints:
+  - Parse only explicit P0/P1/P2/P3 sections or Markdown tables with severity/finding structure.
+  - Do not infer issues from vague prose.
+  - Missing explicit severity means parse failure unless the output explicitly says no issues.
+  - Fallback-generated evidence must include parser=markdown_fallback and path=model-review-raw.md.
+
+tests:
+  required:
+    - fixture empty output remains fail-closed.
+    - fixture real Markdown review parses explicit severity table.
+    - Markdown P0 finding blocks finalizer through existing P0 rules.
+    - Markdown ambiguous summary fails closed.
+    - Markdown explicit no issues returns [].
+    - JSON-first parsing still passes all existing tests.
+    - Windows path resolver prefers opencode.cmd over extensionless opencode.
+    - opencode_run uses the resolved executable path consistently.
+
+acceptance_criteria:
+  - Default reviewer backend no longer fails with WinError 2 on Windows when opencode.cmd is available.
+  - Real Markdown review output from the smoke can be parsed into candidate issues, or explicitly classified as no issues.
+  - Ambiguous Markdown still produces P0 parse issue.
+  - No Issue Contract v0, Ledger merge, or finalizer blocking semantics change.
+  - All existing M4-A and Phase 1 tests pass.
+  - Controlled real model reviewer smoke is rerun and reported.
+
+suggested_test_commands:
+  - python -m pytest tests/test_model_reviewer_backend.py tests/test_reviewer_minimal_loop.py -q
+  - python -m pytest tests/test_issue_ledger.py tests/test_reviewer_minimal_loop.py tests/test_model_reviewer_backend.py tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q
+  - python smoke_test.py

@@ -1,0 +1,61 @@
+id: m4-i3-failed-run-chain
+title: Add same-run governance chain assertion for failed
+created_at: "2026-06-01T12:35:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Complete the first terminal-state same-run governance chain set by adding
+  the failed case. We already have same-run chain assertions for blocked and
+  human_required; this slice closes the trio.
+
+problem_statement:
+  - "M4-I1 covers blocked."
+  - "M4-I2 covers human_required."
+  - "failed still lacks a same-run multi-surface governance chain assertion."
+
+must_do:
+  - Add one focused same-run chain test for a failed run.
+  - The test must assert coherence across:
+    - final-report
+    - failure-analysis
+    - analyze_recovery
+    - run_recover CLI
+    - verify_run_evidence
+    - run_show and/or run_verify display
+  - Reuse the synthetic-run pattern from the existing terminal governance chain tests when possible.
+  - Keep the slice test-only unless a real inconsistency is exposed.
+
+must_not_do:
+  - Do not add new runtime features unless the test reveals a contradiction.
+  - Do not touch src/** by default.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-i3-failed-run-chain.yaml
+  - .ai/runs/m4-i3-failed-run-chain/**
+  - .ai/reports/2026-06-01-m4-i3-failed-run-chain-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only existing terminal governance chain tests in test_go_dispatch.py unless blocked.
+  - Prefer one focused new test rather than a new matrix.
+
+acceptance_criteria:
+  - There is a same-run terminal governance chain assertion for failed.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q

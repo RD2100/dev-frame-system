@@ -1,0 +1,13 @@
+appId: com.example.app
+---
+- launchApp
+- assertVisible: "首页"
+- tapOn: "发现"
+- assertVisible: "推荐"
+- takeScreenshot: screenshots/discover
+- tapOn: "购物车"
+- assertVisible: "我的购物车"
+- takeScreenshot: screenshots/cart
+- tapOn: "我的"
+- assertVisible: "个人中心"
+- takeScreenshot: screenshots/profile

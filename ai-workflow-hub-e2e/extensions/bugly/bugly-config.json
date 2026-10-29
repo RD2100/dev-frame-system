@@ -1,0 +1,15 @@
+// Bugly 配置模板
+// 实际使用时替换 YOUR_APP_ID
+
+{
+  "android": {
+    "appId": "YOUR_BUGLY_ANDROID_APP_ID",
+    "appKey": "YOUR_BUGLY_ANDROID_APP_KEY",
+    "channel": "official",
+    "debug": false
+  },
+  "miniapp": {
+    "appId": "YOUR_BUGLY_MINIAPP_APP_ID",
+    "autoReport": true
+  }
+}

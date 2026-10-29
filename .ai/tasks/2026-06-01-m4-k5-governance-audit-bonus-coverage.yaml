@@ -1,0 +1,53 @@
+id: m4-k5-governance-audit-bonus-coverage
+title: Extend governance audit to validate bonus_same_run coverage
+created_at: "2026-06-01T14:30:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Close the audit-layer gap where bonus_same_run entries are documented but not
+  validated as rigorously as covered entries. This is an audit/test-only slice.
+
+problem_statement:
+  - "test_governance_matrix_audit.py validates covered entries."
+  - "bonus_same_run entries exist for advanced governance statuses, but they are not checked by the same reference/count assertions."
+
+must_do:
+  - Extend the governance matrix audit so bonus_same_run entries are validated too.
+  - Ensure referenced test names/classes for bonus_same_run are checked.
+  - Add explicit count/assertion coverage for bonus_same_run entries.
+  - Keep the slice test-only; no runtime changes.
+
+must_not_do:
+  - Do not change runtime behavior.
+  - Do not touch src/**.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - .ai/tasks/2026-06-01-m4-k5-governance-audit-bonus-coverage.yaml
+  - .ai/runs/m4-k5-governance-audit-bonus-coverage/**
+  - .ai/reports/2026-06-01-m4-k5-governance-audit-bonus-coverage-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only test_governance_matrix_audit.py unless blocked.
+  - Keep this slice narrowly focused on audit assertions.
+
+acceptance_criteria:
+  - bonus_same_run entries are validated similarly to covered entries.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_governance_matrix_audit.py -q
+  - python -m pytest tests/ -q

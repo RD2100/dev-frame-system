@@ -1,0 +1,26 @@
+A98 Evidence ZIP Self-Containment — Circular Dependency Problem
+
+I'm implementing A98 for the ai-workflow-hub SADP governance workflow. A98 requires the evidence ZIP to be fully self-contained: unpacking it and running validate_a98.py from the unpacked directory must pass all checks.
+
+The problem is a circular dependency in the pack script (pack_a98.py):
+
+1. pack_a98.py runs in-scope tests (from a temp unpacked ZIP) to generate IN_SCOPE_TEST_RESULTS_A98.txt
+2. The in-scope tests include test_validate_runs_from_unpacked_zip, which unpacks CDP_EVIDENCE_A98.zip and runs validate_a98.py from it
+3. But CDP_EVIDENCE_A98.zip hasn't been rebuilt yet at this point — it contains the OLD version of validate_a98.py and GPT_REVIEW_PROMPT_A98.txt
+4. So the test fails because the old ZIP has old files that don't pass the updated validation
+
+This means the in-scope transcript always captures a failure, and A90 (Regression Status Fail-Closed) catches it.
+
+Two specific fixes were needed (already done in source files):
+- validate_a98.py: replaced self-referential hardcoded path check with _find_root() existence check
+- GPT_REVIEW_PROMPT_A98.txt: added "hash integrity" keywords
+
+But the circular dependency remains: the pack script can't produce a clean in-scope transcript because it tests against the old ZIP.
+
+What is the best approach to resolve this? Options I see:
+1. Add --deselect for the circular test in pack_a98.py's in-scope run (exclude test_validate_runs_from_unpacked_zip from transcript generation, but keep it in full regression)
+2. Two-pass pack: first build a "draft" ZIP, then run in-scope tests against it, then rebuild the final ZIP with clean transcripts
+3. Skip the unpacked-ZIP test entirely and rely on validate_a98.py's own self-containment checks
+4. Something else?
+
+Which approach best preserves governance integrity while being practically implementable? Please recommend the specific solution and I will implement it.

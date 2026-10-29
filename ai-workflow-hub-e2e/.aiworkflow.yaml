@@ -1,0 +1,14 @@
+project:
+  id: e2e-test
+  name: AI-Hub E2E Test
+  type: backend
+
+commands:
+  lint: "python -m pytest tests/ -x --tb=short"
+  unit_test: echo "test ok"
+
+policy:
+  forbidden_paths:
+    - ".env*"
+  protected_tests:
+    - "tests/**"

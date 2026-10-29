@@ -1,0 +1,12 @@
+{
+  "authorized_by_user": true,
+  "authorized_conversation_url": "https://chatgpt.com/c/6a212fda-6c04-83a8-82fa-0fa036f762f9",
+  "authorized_at": "2026-06-03T00:00:00Z",
+  "review_run_id": "future-minimal-broader-step-candidate-definition-pack-review-v1-20260604",
+  "allow_new_conversation": false,
+  "no_base_url_fallback": true,
+  "no_auto_new_conversation": true,
+  "binding_source": "explicit_user_instruction_current_chat",
+  "binding_scope": "future_minimal_broader_step_candidate_definition_pack_review",
+  "expires_after_review": false
+}

@@ -1,0 +1,47 @@
+# 网络错误归因规则
+
+rules:
+  - id: "network-timeout"
+    pattern: "SocketTimeoutException|ConnectTimeoutException|ReadTimeoutException"
+    source: [stacktrace, error_message]
+    attribution:
+      root_cause: "网络请求超时"
+      likely_module: "网络请求所在模块"
+      severity: "P1"
+      suggestion: "检查网络环境、服务端响应时间、超时配置是否合理"
+
+  - id: "network-dns"
+    pattern: "UnknownHostException|无法解析主机"
+    source: [stacktrace, error_message]
+    attribution:
+      root_cause: "DNS解析失败"
+      likely_module: "网络层"
+      severity: "P0"
+      suggestion: "检查DNS配置、主机名拼写、网络连通性(是否需VPN)"
+
+  - id: "network-ssl"
+    pattern: "SSLException|SSLHandshakeException|certificate"
+    source: [stacktrace, error_message]
+    attribution:
+      root_cause: "SSL证书问题"
+      likely_module: "网络层/服务端"
+      severity: "P0"
+      suggestion: "检查证书是否过期、是否自签名证书未信任、CA证书链"
+
+  - id: "network-http-error"
+    pattern: "HttpHostConnectException|NoHttpResponseException"
+    source: [stacktrace]
+    attribution:
+      root_cause: "HTTP连接失败"
+      likely_module: "网络层/服务端"
+      severity: "P1"
+      suggestion: "检查服务端是否正常运行、端口是否正确、防火墙规则"
+
+  - id: "network-connect"
+    pattern: "ConnectException|Network is unreachable"
+    source: [stacktrace]
+    attribution:
+      root_cause: "网络不可达"
+      likely_module: "设备网络"
+      severity: "P2"
+      suggestion: "检查设备网络状态(移动网络/WiFi)、是否断网、飞行模式"

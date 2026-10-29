@@ -1,0 +1,19 @@
+# 兼容性测试 Profile
+profile: compatibility
+description: "发版前完整验证，含多机型兼容性"
+
+stages:
+  - smoke
+  - regression
+  - compatibility
+  - evidence
+  - report
+  - attribution
+  - gate
+
+gate_profile: release
+
+parallel:
+  enabled: true
+  cross_tool: true
+  max_workers: 8

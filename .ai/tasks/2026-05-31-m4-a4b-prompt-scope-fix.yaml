@@ -1,0 +1,65 @@
+id: m4-a4b-prompt-scope-fix
+title: Restore prompt context scope after M4-A4 wontfix override change
+created_at: "2026-05-31T22:05:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Fix the M4-A4 prompt-context regression: build_prompt_context must include
+  unresolved actionable issues, including blocking P0 wontfix without
+  human_override, but must not reintroduce fixed or otherwise resolved
+  non-blocking issues into the prompt.
+
+problem_statement:
+  - "M4-A4 changed build_prompt_context from load_open_issues() to scanning all latest issues."
+  - "This now re-injects fixed non-blocking issues into prompt context."
+  - "We need the narrow intended behavior only: P0 wontfix without human_override remains visible; resolved/non-blocking items stay out."
+
+must_do:
+  - Keep M4-A4 semantics for P0 wontfix with and without human_override.
+  - Prevent fixed non-blocking issues from appearing in prompt context.
+  - Keep verified issues excluded.
+  - Keep non-P0 wontfix issues excluded.
+  - Add focused regression tests for fixed P2 and fixed P0 visibility.
+  - Keep the fix narrow and local to prompt-context logic/tests.
+
+must_not_do:
+  - Do not change unresolved_p0_count semantics.
+  - Do not change reviewer blocking semantics.
+  - Do not implement issues CLI.
+  - Do not touch cli.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - .ai/tasks/2026-05-31-m4-a4b-prompt-scope-fix.yaml
+  - .ai/runs/m4-a4b-prompt-scope-fix/**
+  - .ai/reports/2026-05-31-m4-a4b-prompt-scope-fix-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+
+token_budget_guidance:
+  - Read only issue_ledger.py and directly relevant tests unless blocked.
+  - Reuse the new M4-A4 tests; do not create broad new test modules.
+
+acceptance_criteria:
+  - Blocking P0 wontfix without human_override remains in prompt context.
+  - Human-overridden P0 wontfix remains excluded from prompt context.
+  - Fixed non-blocking P2 does not appear in prompt context.
+  - Fixed P0 does not appear in prompt context unless there is an explicit reason already covered by existing semantics.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_issue_ledger.py tests/test_reviewer_minimal_loop.py -q
+  - python -m pytest tests/ -q

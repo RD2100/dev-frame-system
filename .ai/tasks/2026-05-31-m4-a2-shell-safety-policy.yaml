@@ -1,0 +1,81 @@
+id: m4-a2-shell-safety-policy
+title: Harden shell safety policy without overblocking Windows commands
+created_at: "2026-05-31T20:10:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Fix the shell safety issue found by real model reviewer smoke:
+  Windows command execution must remain guarded against command injection,
+  but normal PowerShell/CMD syntax must not be overblocked by literal
+  single-character forbidden patterns.
+
+problem_statement:
+  - "Real reviewer smoke found that forbidden_shell_patterns containing literal '|', '&', and ';' can block normal Windows commands."
+  - "run_command() can be called directly and currently does not enforce is_shell_safe(); only run_project_commands() checks first."
+  - "This task is a narrow M4-A follow-up. Do not implement plan_auditor, issues CLI, final-report ledger sections, or wontfix/human_override policy."
+
+must_do:
+  - Add direct safety enforcement inside shell_runner.run_command() so direct callers cannot bypass policy.
+  - Keep run_project_commands() safety behavior compatible with existing callers.
+  - Replace or remove overbroad single-character forbidden patterns from configs/execution-policy.yaml.
+  - Keep blocking for clearly dangerous patterns such as rm -rf, git reset --hard, git clean -fd, curl | sh, wget | sh, mkfs, dd if=, fork bomb, and command-chaining injection patterns where appropriate.
+  - Add focused tests proving normal PowerShell/CMD syntax is not overblocked while dangerous/chained commands are blocked.
+  - Ensure blocked commands do not execute and return a clear blocked error.
+  - Keep changes minimal and localized.
+
+must_not_do:
+  - Do not change Issue Contract v0.
+  - Do not change Ledger merge semantics.
+  - Do not change finalizer blocking rules.
+  - Do not change P0 wontfix/human_override semantics.
+  - Do not implement plan_auditor.
+  - Do not implement aihub issues CLI.
+  - Do not edit ai-workflow-hub/tasks.yaml.
+  - Do not edit ai-workflow-hub-e2e files.
+  - Do not weaken safety by allowing obvious destructive shell patterns.
+
+allow_write:
+  - ai-workflow-hub/configs/execution-policy.yaml
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/tests/test_shell_runner.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-05-31-m4-a2-shell-safety-policy.yaml
+  - .ai/runs/m4-a2-shell-safety-policy/**
+  - .ai/reports/2026-05-31-m4-a2-shell-safety-policy-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+
+token_budget_guidance:
+  - Read only shell_runner.py, execution-policy.yaml, and relevant shell runner tests unless blocked.
+  - Prefer adding one focused test file or extending an existing focused test.
+  - Do not re-audit unrelated M4 files.
+  - Summarize evidence paths instead of pasting long logs.
+
+acceptance_criteria:
+  - Direct run_command() rejects dangerous forbidden commands before subprocess.run() is invoked.
+  - run_project_commands() still reports blocked commands consistently.
+  - A normal command containing a PowerShell pipeline or quoted semicolon can be allowed when it is not one of the configured dangerous patterns.
+  - Dangerous patterns remain blocked.
+  - The change does not touch unrelated governance modules.
+  - Required tests pass and evidence artifacts are written.
+
+suggested_test_commands:
+  - python -m pytest tests/test_shell_runner.py tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q
+  - python smoke_test.py
+
+reviewer_focus:
+  - Check that safety was moved into run_command() without double-reporting or inconsistent return codes.
+  - Check that removing literal '|', '&', ';' does not allow obvious command chaining injection.
+  - Check that no unrelated M4 governance semantics changed.

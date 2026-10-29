@@ -1,0 +1,41 @@
+# Demo 项目配置 — 零依赖，纯本地
+project:
+  name: "demo"
+  description: "TestFrame 自包含演示项目"
+
+stages:
+  - stage: smoke
+    tools: [pytest_api]
+    timeout: 60
+    retry: 0
+    on_failure: continue
+
+  - stage: evidence
+    tools: []
+    timeout: 30
+    on_failure: continue
+
+  - stage: report
+    tools: []
+    timeout: 30
+    on_failure: continue
+
+  - stage: attribution
+    tools: []
+    timeout: 30
+    on_failure: continue
+
+  - stage: gate
+    tools: []
+    timeout: 10
+    on_failure: continue
+
+pytest_api:
+  test_dir: "tests/api/"
+  alt_test_dir: "demo/"
+  json_report: "reports/pytest_results.json"
+
+report:
+  format: "allure"
+  results_dir: "reports/allure-results/"
+  html_dir: "reports/allure-report/"

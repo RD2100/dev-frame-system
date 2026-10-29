@@ -1,0 +1,64 @@
+id: m4-l13-sadp-task-boundary-discipline
+title: Enforce TaskSpec verify boundary discipline in @go dispatch
+created_at: "2026-06-01T19:55:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Prevent @go TaskSpec verification commands from obviously violating
+  deny_write boundaries before execution starts, so small slices cannot
+  silently rewrite forbidden artifacts during “extra verification”.
+
+problem_statement:
+  - "A delegated M4-L12 run executed `python smoke_test.py` even though `smoke_report.txt` was in deny_write."
+  - "The code result was valid, but the verification step crossed the task boundary."
+  - "We want a deterministic preflight guard at `go_dispatch` time for clear verify/deny conflicts."
+
+must_do:
+  - Add a deterministic verify-boundary guard in the @go dispatch path.
+  - Guard must detect at least the confirmed bad pattern:
+    - `verify` includes `smoke_test.py`
+    - `deny_write` includes `smoke_report.txt`
+    - dispatch must fail before `_execute_run`
+  - Keep the guard narrowly scoped to clear, evidence-backed conflicts; do not invent a broad shell parser.
+  - Add focused tests showing:
+    - blocked conflict path
+    - non-conflicting verify path still dispatches
+  - Include at least one real-path or near-real dispatch-path verification command in tests.
+
+must_not_do:
+  - Do not change runtime governance behavior outside @go preflight validation.
+  - Do not change blocking semantics of the workflow graph itself.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+  - Do not broaden into a generic command safety engine.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l13-sadp-task-boundary-discipline.yaml
+  - .ai/runs/m4-l13-sadp-task-boundary-discipline/**
+  - .ai/reports/2026-06-01-m4-l13-sadp-task-boundary-discipline-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only cli.py go_dispatch helpers and focused go_dispatch tests unless blocked.
+  - Keep this slice to verify-boundary preflight plus regression coverage only.
+
+acceptance_criteria:
+  - @go dispatch blocks the confirmed `smoke_test.py` + `smoke_report.txt` deny conflict before execution.
+  - Non-conflicting TaskSpec verify commands still dispatch normally.
+  - Focused tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q

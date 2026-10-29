@@ -1,0 +1,79 @@
+id: 2026-05-31-go-investigate-dispatch-issues
+mode: read
+profile: ai-dev
+title: Investigate @go/OpenCode dispatch issues after project rename
+description: |
+  Perform a read-only investigation of the current ai-workflow-hub @go/OpenCode
+  dispatch implementation and the project rename/path drift. Do not change
+  production code. Produce a detailed investigation report that confirms,
+  rejects, or refines each suspected issue with exact file/line evidence, root
+  cause, blast radius, recommended fix, and verification command.
+
+  Suspected issues to investigate:
+  1. Project path drift after rename: projects.yaml points to D:\devFrame while
+     the actual workspace is D:\dev-frame-opencode. Determine how this affects
+     `aihub go`, `project validate`, run directories, and smoke tests.
+  2. fix_node multi-round guard bug: coding_graph.py may skip the second and
+     later fixer rounds because the pre-check and post-mark use different
+     fix_round values.
+  3. Windows shell execution surface: shell_runner.py forces shell=True on
+     Windows while forbidden_shell_patterns may not block common shell
+     metacharacters.
+  4. Evidence verification gap: verify_run_evidence() exists but may not be
+     called automatically after _execute_run()/go_dispatch completion.
+  5. dry-run/apply boundary: executor.py and fixer.py use
+     `if dry_run and not apply_changes`; evaluate whether `not apply_changes`
+     is safer and whether any current state construction can trigger an
+     unintended apply path.
+  6. Test coverage gaps: identify missing tests for multi-round fix loop,
+     full @go dispatch flow, safety blocked/human_gate propagation, and
+     project path validation after rename.
+
+  Report requirements:
+  - Start with a verdict table: issue, status confirmed/rejected/uncertain,
+    severity P0/P1/P2/P3, evidence path/line.
+  - Include a step-by-step reproduction or static trace for each confirmed
+    issue.
+  - Include a minimal fix plan ordered by priority, with exact files to touch.
+  - Include verification commands for each proposed fix.
+  - Do not modify source files, tests, configs, or task queues.
+allow_read:
+  - AGENTS.md
+  - CLAUDE.md
+  - smoke_test.py
+  - smoke_report.txt
+  - ai-workflow-hub/projects.yaml
+  - ai-workflow-hub/configs/execution-policy.yaml
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/config_loader.py
+  - ai-workflow-hub/src/ai_workflow_hub/project_registry.py
+  - ai-workflow-hub/src/ai_workflow_hub/task_spec_adapter.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/executor.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/fixer.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/evidence.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/git_utils.py
+  - ai-workflow-hub/src/ai_workflow_hub/safety.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_e2e_pipeline.py
+  - ai-workflow-hub/tests/test_stage3b_idempotency.py
+  - ai-workflow-hub/tests/test_batch_retry.py
+allow_write:
+  - .ai/reports/2026-05-31-go-investigate-dispatch-issues-result.md
+deny_write:
+  - "**/.env"
+  - "**/.env.*"
+  - "**/secrets/**"
+  - "**/node_modules/**"
+  - "**/.git/**"
+  - "ai-workflow-hub/src/**"
+  - "ai-workflow-hub/tests/**"
+  - "ai-workflow-hub/projects.yaml"
+  - "ai-workflow-hub/tasks.yaml"
+  - "smoke_report.txt"
+verify:
+  - git status --porcelain=v1
+expected_output:
+  report: .ai/reports/2026-05-31-go-investigate-dispatch-issues-result.md

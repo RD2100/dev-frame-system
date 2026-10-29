@@ -1,0 +1,6 @@
+# Airtest 配置
+airtest:
+  device_uri: "Android:///"
+  log_dir: "reports/airtest_log/"
+  compress: 9
+  interval: 0.5

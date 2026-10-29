@@ -1,0 +1,34 @@
+# TestFrame 默认全局配置
+# 项目级配置会覆盖此文件的同名项
+
+global:
+  timeout: 300
+  retry: 1
+  evidence_retention_days: 30
+  report_dir: "reports"
+  log_level: "INFO"
+
+execution:
+  parallel: true
+  max_workers: 4
+  fail_fast: false
+
+notifications:
+  enabled: false
+  channels:
+    # wecom_webhook: ""
+    # dingtalk_webhook: ""
+    # feishu_webhook: ""
+    # email: ""
+
+quality_gates:
+  smoke_pass_rate_min: 100
+  regression_pass_rate_min: 95
+  crash_count_max: 0
+
+evidence:
+  screenshot_on_failure: true
+  screenshot_on_success: false
+  video_enabled: false
+  logcat_enabled: true
+  network_capture_enabled: false

@@ -1,0 +1,68 @@
+id: m4-l5-governance-matrix-structured-export
+title: Add structured governance matrix contract export
+created_at: "2026-06-01T17:05:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Expose the governance matrix contract as a deterministic structured export so
+  reviewers and automated checks can consume the same contract without parsing
+  panel or markdown text.
+
+problem_statement:
+  - "The governance matrix now has stable panel and markdown views plus explicit ordering contracts."
+  - "There is still no first-class structured export of that contract."
+  - "Consumers who want machine-readable verification would currently need to import Python directly or scrape text output."
+
+must_do:
+  - Add a shared deterministic structured export builder for the governance matrix contract.
+  - Expose that structured export through the existing governance CLI via an explicit format selector.
+  - Keep existing `panel` and `markdown` formats unchanged.
+  - Add focused tests for:
+    - structured export shape
+    - structured export determinism
+    - CLI json/structured mode
+    - preservation of existing formats
+  - Include at least one real-path verification command for the structured export.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not change existing panel/markdown payloads except as required to add the new format selector support.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - .ai/tasks/2026-06-01-m4-l5-governance-matrix-structured-export.yaml
+  - .ai/runs/m4-l5-governance-matrix-structured-export/**
+  - .ai/reports/2026-06-01-m4-l5-governance-matrix-structured-export-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only governance_matrix.py, the governance CLI snippet, and focused governance matrix tests unless blocked.
+  - Keep this slice to structured export + CLI exposure + regression coverage only.
+
+acceptance_criteria:
+  - Governance matrix shared module exposes a deterministic structured export builder.
+  - Existing `panel` and `markdown` outputs remain unchanged.
+  - CLI exposes the structured export with an explicit format value.
+  - Focused tests pass and the real-path structured export command succeeds.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_governance_matrix_audit.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format json
+  - python -m ai_workflow_hub.cli governance matrix --format markdown

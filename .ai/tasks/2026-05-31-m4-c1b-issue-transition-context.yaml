@@ -1,0 +1,61 @@
+id: m4-c1b-issue-transition-context
+title: Preserve issue context across close and reopen transitions
+created_at: "2026-05-31T23:20:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Fix the transition-context gaps found in independent review of M4-C1:
+  close/wontfix and reopen should preserve the original issue context where
+  available instead of degrading to generic status-update metadata.
+
+problem_statement:
+  - "mark_wontfix currently preserves severity from the latest record, but not category/title/hint context unless the caller passes title explicitly."
+  - "mark_reopen currently uses the latest record only; if the latest record is a verified/status-update record, reopen can lose the original issue context."
+
+must_do:
+  - Add a helper that can recover the latest meaningful issue context for a recurrence_key.
+  - For close/wontfix, preserve existing title/category/severity/next_prompt_hint when available.
+  - For reopen, restore the latest meaningful issue context instead of blindly using the latest record when that latest record is only a status-update.
+  - Keep transitions append-only.
+  - Add focused tests covering:
+    - close without explicit title still preserves original title/category.
+    - reopen after verified restores original title/category/severity/hint.
+  - Keep change narrow to issue_ledger and related tests.
+
+must_not_do:
+  - Do not expand issues CLI surface.
+  - Do not change blocking semantics from M4-A4.
+  - Do not change coding_graph, reviewer, shell_runner, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - ai-workflow-hub/tests/test_issue_cli.py
+  - .ai/tasks/2026-05-31-m4-c1b-issue-transition-context.yaml
+  - .ai/runs/m4-c1b-issue-transition-context/**
+  - .ai/reports/2026-05-31-m4-c1b-issue-transition-context-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+
+token_budget_guidance:
+  - Read only issue_ledger.py and directly relevant CLI/ledger tests unless blocked.
+  - Keep the fix local to transition helpers and tests.
+
+acceptance_criteria:
+  - close/wontfix preserves existing issue title/category/severity when available.
+  - reopen after verified restores original issue context instead of status-update context.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_issue_cli.py tests/test_issue_ledger.py -q
+  - python -m pytest tests/ -q

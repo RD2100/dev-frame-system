@@ -1,0 +1,59 @@
+id: m4-i2-human-required-run-chain
+title: Add same-run governance chain assertion for human_required
+created_at: "2026-06-01T12:10:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Extend the terminal governance same-run chain assertions to the
+  human_required state. We already have helper-level and recovery wording
+  coverage, but not one same-run chain spanning all reporting surfaces.
+
+problem_statement:
+  - "M4-I1 added a same-run chain assertion for blocked."
+  - "human_required still lacks the same end-to-end single-run assertion across final-report, failure-analysis, analyze_recovery, run_recover, run_show, and run_verify."
+
+must_do:
+  - Add one focused same-run chain test for a human_required run.
+  - The test must assert coherence across:
+    - final-report
+    - failure-analysis
+    - analyze_recovery
+    - run_recover CLI
+    - run_show and/or run_verify display
+  - Reuse the existing synthetic-run pattern where possible.
+  - Keep the slice test-only unless a real inconsistency is exposed.
+
+must_not_do:
+  - Do not add new runtime features unless the test reveals a contradiction.
+  - Do not touch src/** by default.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-i2-human-required-run-chain.yaml
+  - .ai/runs/m4-i2-human-required-run-chain/**
+  - .ai/reports/2026-06-01-m4-i2-human-required-run-chain-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only existing terminal governance tests in test_go_dispatch.py unless blocked.
+  - Prefer one focused test rather than a new matrix.
+
+acceptance_criteria:
+  - There is a same-run terminal governance chain assertion for human_required.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q

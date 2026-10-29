@@ -1,0 +1,59 @@
+id: m4-l15-verify-boundary-quoted-script-paths
+title: Catch quoted Python script paths in verify-boundary guard
+created_at: "2026-06-01T20:36:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Make the verify-boundary preflight guard catch quoted `.py` script paths so
+  obvious verify/deny conflicts cannot bypass the rule through shell quoting.
+
+problem_statement:
+  - "The current verify-boundary guard correctly blocks `python smoke_test.py`."
+  - "A real probe shows `python \"smoke_test.py\"` currently bypasses the guard and dispatches."
+  - "Quoted script paths are common enough that this is a real boundary hole, not just a theoretical case."
+
+must_do:
+  - Fix the verify-boundary guard so quoted `.py` paths are normalized/detected.
+  - Preserve existing behavior for unquoted and relative-path `.py` commands.
+  - Add focused tests proving:
+    - quoted script path conflict is blocked
+    - existing unquoted and relative-path cases still behave correctly
+  - Keep the guard scope narrow; do not broaden into a generic shell parser.
+
+must_not_do:
+  - Do not change runtime governance behavior or graph blocking semantics.
+  - Do not touch coding_graph.py or shell_runner.py.
+  - Do not change the existing success path for non-conflicting dispatches.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l15-verify-boundary-quoted-script-paths.yaml
+  - .ai/runs/m4-l15-verify-boundary-quoted-script-paths/**
+  - .ai/reports/2026-06-01-m4-l15-verify-boundary-quoted-script-paths-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only cli.py verify-boundary guard and focused go_dispatch tests unless blocked.
+  - Keep the slice to quoted-script-path boundary detection only.
+
+acceptance_criteria:
+  - `python \"smoke_test.py\"` + `smoke_report.txt` deny conflict is blocked before execution.
+  - Existing unquoted / relative-path conflict cases still block.
+  - Focused tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q

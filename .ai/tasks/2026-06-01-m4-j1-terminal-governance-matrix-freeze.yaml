@@ -1,0 +1,56 @@
+id: m4-j1-terminal-governance-matrix-freeze
+title: Freeze blocked human_required failed governance chain test matrix
+created_at: "2026-06-01T12:55:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Consolidate the three terminal governance same-run chain tests into a shared
+  matrix-style test scaffold. The behavior is already covered, but the current
+  tests duplicate a large synthetic-run pattern three times.
+
+problem_statement:
+  - "blocked, human_required, and failed same-run governance chain assertions all exist."
+  - "They currently repeat the same synthetic-run harness with only status-specific expectations changed."
+  - "That duplication makes later governance drift harder to maintain."
+
+must_do:
+  - Refactor the terminal governance chain tests into a shared helper or matrix pattern.
+  - Preserve coverage for blocked, human_required, and failed.
+  - Keep the test assertions materially equivalent.
+  - Keep this slice test-only unless the refactor reveals a real contradiction.
+
+must_not_do:
+  - Do not change runtime behavior.
+  - Do not touch src/** by default.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-j1-terminal-governance-matrix-freeze.yaml
+  - .ai/runs/m4-j1-terminal-governance-matrix-freeze/**
+  - .ai/reports/2026-06-01-m4-j1-terminal-governance-matrix-freeze-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only the existing terminal governance chain tests in test_go_dispatch.py.
+  - Prefer a single shared helper or data table rather than broad restructuring.
+
+acceptance_criteria:
+  - blocked, human_required, and failed same-run governance chain coverage is preserved.
+  - test structure is more DRY than before.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q

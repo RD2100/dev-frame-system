@@ -1,0 +1,54 @@
+id: m4-a-real-model-reviewer-smoke
+title: Controlled real model reviewer smoke for model-review-raw.md shape
+created_at: "2026-05-31T00:00:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Run a controlled real model reviewer smoke using the M4-A reviewer backend,
+  observe the real model-review-raw.md output shape, inspect model-review-parse.json,
+  and decide whether parse_model_review() needs enhancement.
+
+scope:
+  must_do:
+    - Do not modify source or tests.
+    - Use a small synthetic reviewer state with no source diff application.
+    - Call reviewer_node with the real default model backend.
+    - Write all smoke artifacts under .ai/runs/m4-a-real-model-reviewer-smoke.
+    - Use an isolated smoke ledger under .ai/runs/m4-a-real-model-reviewer-smoke/ledger.
+    - Inspect model-review-raw.md and model-review-parse.json.
+    - Report whether parse_model_review() handled the real output.
+    - If parser enhancement is needed, report the gap instead of editing code in this smoke task.
+
+  must_not_do:
+    - Do not edit ai-workflow-hub source files.
+    - Do not edit ai-workflow-hub tests.
+    - Do not edit ai-workflow-hub/tasks.yaml.
+    - Do not edit ai-workflow-hub-e2e files.
+    - Do not write secrets into logs or reports.
+    - Do not run executor/fixer.
+
+allow_write:
+  - .ai/tasks/2026-05-31-m4-a-real-model-reviewer-smoke.yaml
+  - .ai/runs/m4-a-real-model-reviewer-smoke/**
+  - .ai/reports/2026-05-31-m4-a-real-model-reviewer-smoke-report.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/src/**
+  - ai-workflow-hub/tests/**
+  - ai-workflow-hub/tasks.yaml
+  - smoke_report.txt
+  - ai-workflow-hub-e2e/**
+
+acceptance_criteria:
+  - Real model reviewer backend was invoked once or a clear blocker is recorded.
+  - model-review-raw.md exists if the backend ran.
+  - model-review-parse.json exists if the backend returned output.
+  - review.md, review.yaml, and review-issues.json are produced by deterministic reviewer code.
+  - The report states whether parse_model_review() parsed the real output without enhancement.
+  - No source/test files are modified by this smoke task.

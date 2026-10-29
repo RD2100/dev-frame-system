@@ -1,0 +1,73 @@
+id: m4-d1-final-report-ledger-section
+title: Add deterministic Issue Ledger section to final-report
+created_at: "2026-05-31T23:40:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Add a deterministic Issue Ledger section to final-report.md so each run
+  surfaces the current issue state clearly: blocking P0s, open issues,
+  verified items, and recent plan/review issue artifacts. Keep it read-only
+  and summary-oriented.
+
+problem_statement:
+  - "Issue ledger now exists, plus plan-review and review-issues artifacts, but final-report.md does not summarize them."
+  - "Without a ledger section, each run ends without a compact statement of what is still open, what was verified, and what remains blocking."
+
+must_do:
+  - Extend finalizer deterministic report generation with a new Issue Ledger section.
+  - The section must summarize, at minimum:
+    - unresolved blocking P0 count
+    - latest open issues count
+    - latest verified issues count
+    - latest wontfix issues count
+    - recent plan/review artifact issue counts when run-dir files exist
+  - Prefer reading existing deterministic sources:
+    - review-issues.json
+    - plan-issues.json
+    - ledger JSONL latest state
+  - Keep the section read-only; do not mutate ledger state during finalization.
+  - Add focused tests for final-report content.
+
+must_not_do:
+  - Do not change blocking semantics.
+  - Do not change issues CLI behavior.
+  - Do not change reviewer or plan_auditor routing.
+  - Do not edit shell safety files, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - .ai/tasks/2026-05-31-m4-d1-final-report-ledger-section.yaml
+  - .ai/runs/m4-d1-final-report-ledger-section/**
+  - .ai/reports/2026-05-31-m4-d1-final-report-ledger-section-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only finalizer.py, issue_ledger.py, and directly relevant tests unless blocked.
+  - Keep this slice summary-only; do not add new ledger status transitions.
+
+acceptance_criteria:
+  - final-report.md contains an Issue Ledger section.
+  - The section reports unresolved P0 count deterministically.
+  - The section includes counts for latest open / verified / wontfix issues.
+  - The section reflects plan-issues.json and review-issues.json counts when present.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_reviewer_minimal_loop.py tests/test_issue_ledger.py -q
+  - python -m pytest tests/ -q

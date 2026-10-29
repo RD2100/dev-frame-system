@@ -1,0 +1,20 @@
+{
+  "_comment": "EXAMPLE ONLY — not production config. Replace values before use.",
+  "conversations": {
+    "active": "PLACEHOLDER_CONVERSATION_ID",
+    "fallback": null
+  },
+  "cdp": {
+    "host": "localhost",
+    "port": 9222
+  },
+  "selectors": {
+    "file_input": "input[type=\"file\"]",
+    "editor": "div[contenteditable=\"true\"].ProseMirror",
+    "send_button": "button[data-testid=\"send-button\"]"
+  },
+  "timing": {
+    "poll_wait_seconds": 60,
+    "max_poll_attempts": 3
+  }
+}

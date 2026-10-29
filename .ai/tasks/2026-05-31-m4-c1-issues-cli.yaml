@@ -1,0 +1,77 @@
+id: m4-c1-issues-cli
+title: "Add minimal issue ledger CLI: list verify close reopen"
+created_at: "2026-05-31T23:00:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Land the first minimal issues CLI on top of Agent Issue Ledger so humans and
+  agents can inspect and transition issue state without editing JSONL by hand.
+  Keep it narrow: list, verify, close, and reopen only.
+
+problem_statement:
+  - "The ledger exists, but there is no human-facing CLI for routine issue state changes."
+  - "Without a CLI, Ledger is just a file and cannot participate naturally in the @go workflow."
+  - "M4-A4 already defined P0/wontfix/human_override semantics; the CLI should express those semantics without expanding governance further."
+
+must_do:
+  - Extend the existing aihub issue command group with subcommands: list, verify, close, reopen.
+  - issue list must read the ledger and show latest issue state per recurrence_key.
+  - issue verify <recurrence_key> must append a verified record.
+  - issue close <recurrence_key> must append a wontfix record.
+  - issue close must support explicit --human-override so P0 close semantics can be expressed.
+  - issue reopen <recurrence_key> must append an open record using the latest known title/category/severity context when available.
+  - Keep transitions append-only; do not rewrite historical JSONL lines.
+  - Add focused tests for the new CLI commands and ledger transitions.
+
+must_not_do:
+  - Do not add history, delete, bulk edit, export, or accepted_risk workflows.
+  - Do not change Issue Contract v0 required fields.
+  - Do not change finalizer semantics.
+  - Do not change shell safety or plan_auditor code.
+  - Do not edit ai-workflow-hub/tasks.yaml.
+  - Do not edit ai-workflow-hub-e2e files.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/tests/test_issue_cli.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - .ai/tasks/2026-05-31-m4-c1-issues-cli.yaml
+  - .ai/runs/m4-c1-issues-cli/**
+  - .ai/reports/2026-05-31-m4-c1-issues-cli-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only the existing `issue` CLI section, `issue_ledger.py`, and directly relevant tests unless blocked.
+  - Keep the first slice textual/human-friendly; no JSON output mode unless already trivial.
+  - Reuse existing ledger helpers where possible instead of inventing a separate issue store.
+
+acceptance_criteria:
+  - aihub issue list shows latest issues from the ledger.
+  - aihub issue verify <key> appends a verified record and removes the issue from prompt context.
+  - aihub issue close <key> appends a wontfix record.
+  - aihub issue close <key> --human-override records human_override=true.
+  - aihub issue reopen <key> appends an open record.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_issue_cli.py tests/test_issue_ledger.py -q
+  - python -m pytest tests/ -q
+
+reviewer_focus:
+  - Check that transitions are append-only and do not mutate historical issues.
+  - Check that close + human_override semantics line up with M4-A4 blocking rules.
+  - Check that the CLI stays narrow and does not expand into broader governance features.

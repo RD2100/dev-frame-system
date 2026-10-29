@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "awsp_version": "1.3.0",
+  "project_id": "dev-frame-opencode",
+  "project_root": "D:\\dev-frame-opencode",
+  "default_conversation_policy": "one_agent_one_conversation",
+  "bindings": [
+    {
+      "agent_id": "agent-opencode-001",
+      "role": "executor",
+      "binding_status": "active",
+      "conversation_id": "6a297e5f-c9c8-83a8-b413-a8fc414e0e85",
+      "chat_url": "https://chatgpt.com/c/6a297e5f-c9c8-83a8-b413-a8fc414e0e85",
+      "cdp_endpoint": "http://localhost:9222",
+      "allowed_task_scope": [
+        "*"
+      ],
+      "capture_policy": {
+        "must_match_run_id": true,
+        "must_match_task_id": true,
+        "must_include_end_marker": true,
+        "forbid_last_message_only_capture": true
+      }
+    }
+  ]
+}

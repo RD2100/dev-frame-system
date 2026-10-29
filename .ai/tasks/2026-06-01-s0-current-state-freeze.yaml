@@ -1,0 +1,72 @@
+id: s0-current-state-freeze
+title: Freeze current M4 closing-state baseline
+created_at: "2026-06-01T20:45:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Freeze the current M4 closing-state baseline as a read-only snapshot so
+  later S1/S2 work has an auditable before-state. This slice records only; it
+  does not repair code, clean the worktree, or rewrite governance semantics.
+
+problem_statement:
+  - "We have accumulated many M4 slices, reports, and run artifacts."
+  - "Before changing final status semantics, we need a stable baseline snapshot of the current worktree and key evidence runs."
+  - "The project's real artifact layout is `.ai/runs/` and `.ai/reports/`, so the baseline must use the current structure rather than stale draft paths."
+
+must_do:
+  - Record the current `git status --short` output verbatim into the baseline snapshot.
+  - Inspect and summarize at least these key runs:
+    - `.ai/runs/m4-a1-harden-model-reviewer-parser`
+    - `.ai/runs/m4-l13-sadp-task-boundary-discipline`
+  - For each key run, record whether the run exists and whether key artifacts exist:
+    - `review.yaml`
+    - `final-report.md`
+    - `chain-evidence.json`
+    - any available orchestrator review / result report
+  - Record current known semantic tensions explicitly, at minimum:
+    - `evidence_status=pass` does not imply final batch pass
+    - final batch state is a deterministic synthesis, not a single evidence bit
+    - verify-boundary blocks are preflight/task-boundary outcomes, not runtime success/failure
+  - Write a draft evidence index describing which artifacts are currently trustworthy, partially trustworthy, or semantically ambiguous.
+
+must_not_do:
+  - Do not edit source code.
+  - Do not clean the worktree.
+  - Do not delete temp/generated files.
+  - Do not rerun commands that rewrite existing run artifacts.
+  - Do not modify `.gitignore`, `docs/`, `tools/`, `.ai/runs/`, or `smoke_report.txt`.
+  - Do not fix any known issue in this slice.
+
+allow_write:
+  - .ai/reports/baseline-snapshot-20260601.md
+  - .ai/reports/evidence-index-draft-20260601.md
+  - .ai/tasks/2026-06-01-s0-current-state-freeze.yaml
+  - .ai/runs/s0-current-state-freeze/**
+
+deny_write:
+  - .git/**
+  - tools/**
+  - docs/**
+  - .ai/runs/m4-*/**
+  - smoke_report.txt
+  - ai-workflow-hub/**
+  - ai-workflow-hub-e2e/**
+
+token_budget_guidance:
+  - Read only current worktree status, the two key run directories, and the most relevant existing reports unless blocked.
+  - Keep this slice to baseline recording only.
+
+acceptance_criteria:
+  - `baseline-snapshot-20260601.md` exists and includes verbatim `git status --short`.
+  - The two key runs are summarized with artifact presence and readable current-state conclusions.
+  - The semantic tensions are explicitly called out in the snapshot.
+  - `evidence-index-draft-20260601.md` distinguishes trustworthy vs ambiguous artifacts.
+
+suggested_test_commands:
+  - test -f .ai/reports/baseline-snapshot-20260601.md
+  - test -f .ai/reports/evidence-index-draft-20260601.md
+  - grep -n "git status --short" .ai/reports/baseline-snapshot-20260601.md
+  - grep -n "evidence_status=pass" .ai/reports/baseline-snapshot-20260601.md
+  - grep -n "verify-boundary" .ai/reports/baseline-snapshot-20260601.md

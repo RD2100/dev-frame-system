@@ -1,0 +1,7 @@
+﻿Please complete the A101 review now using the A101 evidence ZIP already attached in the previous user message. Do not respond with a plan or a promise to review.
+
+Your response must start with exactly one of these two first-line verdicts:
+ACCEPTED
+REJECTED
+
+If ACCEPTED, briefly list the evidence checks you verified. If REJECTED, list specific blocking issues and the exact GPT directive for the next acceptance.

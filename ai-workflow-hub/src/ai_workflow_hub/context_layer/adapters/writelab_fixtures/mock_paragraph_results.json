@@ -1,0 +1,144 @@
+[
+  {
+    "diagnosis_id": "PD-001",
+    "chapter": "方法论",
+    "section": "3.1",
+    "paragraph_index": 0,
+    "expected_function": "problem_statement",
+    "actual_function": "政策倡议式",
+    "function_match_score": 25,
+    "confidence": 0.85,
+    "main_claim": "教育政策研究需要系统化的方法论框架",
+    "argument_chain": {
+      "claim": "教育政策研究需要系统化的方法论框架",
+      "explanation": "基于对现有文献的分析",
+      "mechanism": "规则引擎无法推断",
+      "evidence": "规则引擎无法推断",
+      "landing": "规则引擎无法推断"
+    },
+    "problems": [
+      {
+        "type": "function_mismatch",
+        "severity": "high",
+        "text_span": null,
+        "explanation": "期望为问题陈述段，实际为政策倡议式表达",
+        "revision_direction": "用具体问题替代倡议性表达"
+      }
+    ],
+    "overall_comment": "段落功能严重不匹配：期望问题陈述但实际为政策倡议",
+    "involves_real_data": false,
+    "diagnosis_source": "rules_fallback"
+  },
+  {
+    "diagnosis_id": "PD-002",
+    "chapter": "方法论",
+    "section": "3.2",
+    "paragraph_index": 1,
+    "expected_function": "evidence_presentation",
+    "actual_function": "抽象论述",
+    "function_match_score": 40,
+    "confidence": 0.55,
+    "main_claim": "数据收集采用多源三角验证策略",
+    "argument_chain": {
+      "claim": "数据收集采用多源三角验证策略",
+      "explanation": "因为需要确保数据可靠性",
+      "mechanism": "规则引擎无法推断",
+      "evidence": "规则引擎无法推断",
+      "landing": "规则引擎无法推断"
+    },
+    "problems": [
+      {
+        "type": "missing_evidence",
+        "severity": "medium",
+        "text_span": null,
+        "explanation": "证据呈现段缺少具体数据源描述",
+        "revision_direction": "补充具体数据来源和样本信息"
+      }
+    ],
+    "overall_comment": "证据呈现段过于抽象，需要补充具体数据",
+    "involves_real_data": false,
+    "diagnosis_source": "rules_fallback"
+  },
+  {
+    "diagnosis_id": "PD-003",
+    "chapter": "引言",
+    "section": "1.2",
+    "paragraph_index": 2,
+    "expected_function": "literature_summary",
+    "actual_function": "文献综述",
+    "function_match_score": 85,
+    "confidence": 0.92,
+    "main_claim": "近年来教育政策研究呈现跨学科趋势",
+    "argument_chain": {
+      "claim": "近年来教育政策研究呈现跨学科趋势",
+      "explanation": "基于多篇引用文献的综合分析",
+      "mechanism": "多学科方法整合",
+      "evidence": "引用了 Chen2023、Zhang2024 等研究",
+      "landing": "指出跨学科整合是未来方向"
+    },
+    "problems": [],
+    "overall_comment": "段落功能与预期匹配良好",
+    "involves_real_data": false,
+    "diagnosis_source": "llm"
+  },
+  {
+    "diagnosis_id": "PD-004",
+    "chapter": "结论",
+    "section": "5.1",
+    "paragraph_index": 0,
+    "expected_function": "conclusion",
+    "actual_function": "模板化论述",
+    "function_match_score": 35,
+    "confidence": 0.35,
+    "main_claim": "本研究为教育政策制定提供了重要参考",
+    "argument_chain": {
+      "claim": "本研究为教育政策制定提供了重要参考",
+      "explanation": "基于研究发现的总结",
+      "mechanism": "规则引擎无法推断",
+      "evidence": "规则引擎无法推断",
+      "landing": "规则引擎无法推断"
+    },
+    "problems": [
+      {
+        "type": "function_mismatch",
+        "severity": "high",
+        "text_span": null,
+        "explanation": "结论段使用模板化表达，缺乏具体发现",
+        "revision_direction": "用具体研究发现替代空泛结论"
+      }
+    ],
+    "overall_comment": "结论段功能严重不匹配，置信度低，需重点关注",
+    "involves_real_data": true,
+    "diagnosis_source": "rules_fallback"
+  },
+  {
+    "diagnosis_id": "PD-005",
+    "chapter": "方法论",
+    "section": "3.3",
+    "paragraph_index": 0,
+    "expected_function": "methodology_description",
+    "actual_function": "规范性论述",
+    "function_match_score": 50,
+    "confidence": 0.48,
+    "main_claim": "应当采用混合方法进行数据分析",
+    "argument_chain": {
+      "claim": "应当采用混合方法进行数据分析",
+      "explanation": "因为单一方法存在局限性",
+      "mechanism": "规则引擎无法推断",
+      "evidence": "规则引擎无法推断",
+      "landing": "规则引擎无法推断"
+    },
+    "problems": [
+      {
+        "type": "missing_evidence",
+        "severity": "low",
+        "text_span": null,
+        "explanation": "方法描述缺少具体操作步骤",
+        "revision_direction": "补充具体的分析步骤和工具说明"
+      }
+    ],
+    "overall_comment": "方法描述偏规范性，需补充实操细节",
+    "involves_real_data": false,
+    "diagnosis_source": "llm"
+  }
+]

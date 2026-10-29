@@ -1,0 +1,113 @@
+Best approach: Option 2, but with an explicit post-pack validation phase. Do not treat the circular ZIP self-test as an ordinary in-scope test during transcript generation.
+
+The clean solution is:
+
+regular in-scope tests
+    -> generate in-scope transcript
+    -> generate manifest and bundle hash
+    -> build final/candidate ZIP
+    -> unpack that ZIP and run validate_a98.py
+    -> run the ZIP self-containment test against that ZIP
+    -> capture post-pack self-containment transcript
+
+The key governance point is that test_validate_runs_from_unpacked_zip is not flaky and should not be silently skipped. It is a phase-dependent final-artifact test. It cannot be part of the transcript that is itself inside the ZIP being tested.
+
+So I would implement A98 like this:
+
+Recommended A98 design
+1. Split tests into two classes of evidence
+
+A. Pre-pack / bundled evidence tests
+
+These generate the normal bundled transcripts:
+
+REGRESSION_OUTPUT_A98.txt
+IN_SCOPE_TEST_RESULTS_A98.txt
+COUNTS_MANIFEST_A98.json
+evidence_bundle_hash
+
+These should exclude only the final-artifact ZIP self-test:
+
+--deselect tests/test_paper_a98_...py::...::test_validate_runs_from_unpacked_zip
+
+But document it explicitly as:
+
+deferred_post_pack_test:
+  reason: requires finalized evidence ZIP artifact
+  not_known_flaky: true
+  not_ordinary_skip: true
+
+Do not put it in known_flaky_tests.json.
+
+B. Post-pack / final-artifact tests
+
+After the ZIP is built, run:
+
+python scripts/validate_a98.py
+
+from an extracted copy of the final ZIP, and also run the self-containment test against that exact ZIP.
+
+Capture this as something like:
+
+output/SELF_CONTAINMENT_OUTPUT_A98.txt
+
+or:
+
+output/FINAL_ZIP_VALIDATION_OUTPUT_A98.txt
+
+This transcript should be excluded from evidence_bundle_hash, just like VALIDATION_OUTPUT, because it validates the completed bundle and would otherwise create a self-reference loop.
+
+Why not the other options?
+Option 1 alone is too weak
+
+Just adding --deselect can make the transcript clean, but it weakens governance unless the deselection is explicitly classified as a post-pack deferred gate and then actually run after the ZIP is built.
+
+So --deselect is acceptable only as part of a staged finalization protocol.
+
+Option 2 naive two-pass is not enough
+
+A draft ZIP helps, but a naive draft/final rebuild can still drift if the final ZIP includes transcripts generated after the draft. You need a clear rule:
+
+Bundle-covered artifacts are finalized before bundle hash.
+Post-pack validation artifacts are excluded from the bundle hash.
+
+That breaks the circularity cleanly.
+
+Option 3 is not enough
+
+Relying only on validate_a98.py self-containment checks loses the independent proof that the ZIP can be unpacked and validated as an artifact. A98 is specifically about artifact self-containment, so it needs an explicit post-pack proof.
+
+Specific implementation directive
+
+Implement A98 as:
+
+PAPER-AUDIT-ZIP-SELF-CONTAINMENT-PHASED-A98
+
+Required changes:
+
+In pack_a98.py, define the ZIP self-containment test as a deferred post-pack test, not as ordinary in-scope evidence.
+
+Generate IN_SCOPE_TEST_RESULTS_A98.txt with the final-artifact test deselected, and record the deselection reason in SCOPE_DECLARATION_A98.txt.
+
+Build the evidence ZIP after manifest and bundle hash finalization.
+
+Unpack the built ZIP into a temp directory and run:
+
+python scripts/validate_a98.py
+
+from inside that unpacked directory.
+
+Run the specific self-containment pytest node against the built ZIP, preferably using an explicit environment variable instead of a hardcoded path:
+
+AIWFH_EVIDENCE_ZIP_UNDER_TEST=/path/to/CDP_EVIDENCE_A98.zip \
+python -m pytest tests/test_paper_a98_...py::...::test_validate_runs_from_unpacked_zip -q
+
+Store the result as:
+
+output/SELF_CONTAINMENT_OUTPUT_A98.txt
+
+Exclude SELF_CONTAINMENT_OUTPUT_A98.txt from evidence_bundle_hash, and document that exclusion for the same reason as VALIDATION_OUTPUT: it is post-pack validation evidence.
+
+Make validate_a98.py fail if the post-pack self-containment transcript is missing, nonzero, or unparsable, but do not include that transcript in the bundle hash.
+
+This gives you the strongest governance posture: clean bundled evidence, no stale ZIP dependency, explicit final-artifact validation, and no self-referential hash loop.

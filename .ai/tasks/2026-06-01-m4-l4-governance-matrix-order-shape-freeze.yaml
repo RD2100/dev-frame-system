@@ -1,0 +1,68 @@
+id: m4-l4-governance-matrix-order-shape-freeze
+title: Freeze governance matrix ordering and summary shape contract
+created_at: "2026-06-01T16:42:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Make the governance matrix ordering and summary shape explicit and
+  deterministic so future coverage additions cannot silently drift the human
+  view or test expectations.
+
+problem_statement:
+  - "Current governance matrix output order is effectively inherited from dict insertion order."
+  - "Panel and markdown outputs work today, but the ordering and shape are not frozen as an explicit contract."
+  - "Future changes could accidentally reorder groups or statuses without a clear test failure tied to presentation stability."
+
+must_do:
+  - Introduce explicit shared ordering/shape contract for governance matrix groups and statuses.
+  - Make both panel and markdown builders consume that explicit contract rather than relying on incidental dict iteration.
+  - Add focused tests that lock:
+    - group order
+    - covered status order
+    - bonus status order
+    - summary/footer shape
+  - Keep current human-visible order unchanged.
+  - Keep existing valid formats (`panel`, `markdown`) and CLI behavior unchanged.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not add new governance statuses or groups.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - .ai/tasks/2026-06-01-m4-l4-governance-matrix-order-shape-freeze.yaml
+  - .ai/runs/m4-l4-governance-matrix-order-shape-freeze/**
+  - .ai/reports/2026-06-01-m4-l4-governance-matrix-order-shape-freeze-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+
+token_budget_guidance:
+  - Read only governance_matrix.py and the focused governance matrix tests unless blocked.
+  - Keep the slice to ordering/shape contract freeze plus regression coverage only.
+
+acceptance_criteria:
+  - Governance matrix exposes an explicit shared ordering/shape contract.
+  - Panel and markdown outputs preserve the existing visible order using that contract.
+  - Focused tests fail if group/status order drifts.
+  - Existing governance matrix commands still work unchanged.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_governance_matrix_audit.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format markdown
+  - python -m ai_workflow_hub.cli governance matrix --format panel

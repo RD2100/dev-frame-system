@@ -1,0 +1,83 @@
+id: m4-a4-p0-wontfix-override
+title: Align P0 wontfix blocking with explicit human override semantics
+created_at: "2026-05-31T21:50:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Resolve the current governance inconsistency around P0 wontfix issues:
+  a P0 issue marked wontfix must continue to block by default, but an explicit
+  human_override must allow it to stop blocking. Prompt-context filtering must
+  align with the same rule.
+
+problem_statement:
+  - "Current code excludes all wontfix issues from prompt context."
+  - "Current code counts P0 wontfix as blocking in issue_ledger and reviewer."
+  - "There is no human_override mechanism yet, so close/wontfix semantics are internally inconsistent."
+
+must_do:
+  - Introduce a deterministic helper for P0 blocking semantics instead of repeating inline checks.
+  - Define the rule: P0 open and P0 fixed still block; P0 wontfix blocks unless explicit human_override is true.
+  - Keep verified P0 non-blocking.
+  - Make unresolved_p0_count() use the shared helper.
+  - Make reviewer blocking counts use the shared helper.
+  - Align build_prompt_context() with the same semantics: a blocking P0 wontfix without human_override must remain visible in prompt context; a wontfix with human_override may be excluded from prompt context.
+  - Add focused tests for:
+    - P0 wontfix without human_override still blocks.
+    - P0 wontfix with human_override does not block.
+    - Prompt context includes unresolved P0 wontfix.
+    - Prompt context excludes human-overridden P0 wontfix.
+  - Keep change minimal and local.
+
+must_not_do:
+  - Do not implement issues CLI.
+  - Do not implement accepted_risk workflow.
+  - Do not change Issue Contract v0 required fields.
+  - Do not change finalizer structure beyond the shared blocking helper behavior.
+  - Do not edit ai-workflow-hub/tasks.yaml.
+  - Do not edit ai-workflow-hub-e2e files.
+  - Do not touch shell safety files unless directly required by tests.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - .ai/tasks/2026-05-31-m4-a4-p0-wontfix-override.yaml
+  - .ai/runs/m4-a4-p0-wontfix-override/**
+  - .ai/reports/2026-05-31-m4-a4-p0-wontfix-override-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+
+token_budget_guidance:
+  - Read only issue_ledger.py, reviewer.py, and the directly relevant tests unless blocked.
+  - Reuse existing tests instead of creating a broad new test module.
+  - Keep evidence concise and scoped to this semantic change.
+
+acceptance_criteria:
+  - P0 open blocks.
+  - P0 fixed blocks.
+  - P0 wontfix without human_override blocks.
+  - P0 wontfix with human_override does not block.
+  - Prompt context includes unresolved blocking P0 wontfix.
+  - Prompt context excludes human-overridden P0 wontfix.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_reviewer_minimal_loop.py tests/test_issue_ledger.py -q
+  - python -m pytest tests/ -q
+
+reviewer_focus:
+  - Check that all P0 blocking decisions now flow through one helper.
+  - Check that prompt context and finalizer/reviewer blocking semantics are no longer contradictory.
+  - Check that human_override is additive and narrow, not a general bypass.

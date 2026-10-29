@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperTaskSpec",
+  "type": "object",
+  "required": ["task_id", "project_id", "paper_id", "task_type", "input_policy", "acceptance_criteria"],
+  "properties": {
+    "task_id": {"type": "string", "description": "唯一任务标识"},
+    "project_id": {"type": "string"},
+    "paper_id": {"type": "string"},
+    "paper_type": {"type": "string", "enum": ["empirical", "theoretical", "review", "case_study", "mixed_methods"]},
+    "target_journal": {"type": "string", "description": "目标期刊类型，如 CSSCI/核心/普通"},
+    "chapter": {"type": "string", "description": "当前章节，如 引言/文献综述/方法论/结果/讨论"},
+    "section": {"type": "string"},
+    "task_type": {"type": "string", "enum": ["draft", "revise", "review", "restructure", "citation_check", "abstract"]},
+    "input_policy": {"type": "string", "enum": ["context_pack_only", "context_pack_plus_vault", "full_access"], "description": "模型输入边界"},
+    "constraints": {"type": "array", "items": {"type": "string"}},
+    "acceptance_criteria": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "human_required_rules": {"type": "array", "items": {"type": "string"}},
+    "confidentiality": {"type": "string", "enum": ["public", "private", "sensitive"], "default": "private"}
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "_comment": "验收结果示例 - 由 Deterministic Gate 生成，记录 LLM 产出的验收判定和具体问题清单。",
+  "status": "accepted_with_limitation",
+  "reasons": [
+    "段落功能匹配度 78%，超过 70% 阈值",
+    "表达风险等级 medium，未触发 critical",
+    "引用来源 zhang2024policy 在 zotero_references 中已验证"
+  ],
+  "blocking_issues": [],
+  "non_blocking_issues": [
+    {
+      "issue_id": "issue-001",
+      "issue_type": "expression",
+      "severity": "minor",
+      "location": {"chapter": "引言", "paragraph_index": 2},
+      "evidence": "第二段出现1次'应当'表达，未超过阈值但建议替换为具体建议",
+      "recommendation": "将'应当加强'替换为'可通过以下路径'等具体表述",
+      "blocking": false,
+      "human_required": false
+    }
+  ],
+  "required_next_actions": [
+    "minor revision: 替换第二段规范性表达"
+  ],
+  "reviewer": "deterministic_gate",
+  "evidence_pack_ref": "ep-20260610-intro-draft-001"
+}

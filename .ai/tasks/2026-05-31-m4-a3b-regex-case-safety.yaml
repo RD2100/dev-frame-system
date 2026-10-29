@@ -1,0 +1,67 @@
+id: m4-a3b-regex-case-safety
+title: Preserve regex escape semantics in shell policy validation and matching
+created_at: "2026-05-31T21:35:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Fix the M4-A3 review finding: regex policy handling must not lowercase the
+  regex source before compile/search, because that changes escape semantics
+  such as \S -> \s. Preserve case-insensitive matching without mutating the
+  original regex pattern string.
+
+problem_statement:
+  - "shell_runner.is_shell_safe() lowercases the full pattern before checking regex: and running re.search."
+  - "config_loader.validate_execution_policy() also compiles the lowercased regex source."
+  - "This can silently change configured regex meaning."
+
+must_do:
+  - Preserve original regex source when compiling and matching regex: patterns.
+  - Keep case-insensitive behavior through regex flags, not by mutating the source pattern.
+  - Keep non-regex substring matching behavior unchanged.
+  - Add focused tests proving uppercase regex escapes keep their semantics.
+  - Re-run focused tests and broader tests.
+
+must_not_do:
+  - Do not change Issue Contract v0.
+  - Do not change Ledger merge semantics.
+  - Do not change finalizer blocking rules.
+  - Do not edit ai-workflow-hub/tasks.yaml.
+  - Do not edit ai-workflow-hub-e2e files.
+  - Do not broaden this into another shell policy redesign.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/config_loader.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/tests/test_shell_runner.py
+  - ai-workflow-hub/tests/test_doctor_policy.py
+  - .ai/tasks/2026-05-31-m4-a3b-regex-case-safety.yaml
+  - .ai/runs/m4-a3b-regex-case-safety/**
+  - .ai/reports/2026-05-31-m4-a3b-regex-case-safety-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+
+token_budget_guidance:
+  - Read only shell_runner.py, config_loader.py, and the two focused test files unless blocked.
+  - Keep the fix to the regex handling path only.
+
+acceptance_criteria:
+  - Regex compile/search uses the original pattern text after the regex: prefix.
+  - Case-insensitive matching is preserved.
+  - A test with uppercase escapes such as \\S demonstrates semantics are preserved.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_shell_runner.py tests/test_doctor_policy.py -q
+  - python -m pytest tests/ -q

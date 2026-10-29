@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.1",
+  "description": "Machine-readable classification of known-flaky tests for SADP governance regression",
+  "tests": [
+    {
+      "test_id": "tests/test_paper_a20_real_e2e.py::TestA20CLIAgainstRealData::test_cli_list_shows_real_run",
+      "deselect_arg": "tests/test_paper_a20_real_e2e.py::TestA20CLIAgainstRealData::test_cli_list_shows_real_run",
+      "classification": "known_flaky",
+      "failure_reason": "Date-dependent: asserts paper-YYYYMMDD with hardcoded date that becomes stale after midnight",
+      "impact": "non_blocking",
+      "always_deselected": true,
+      "verified_node_id": true
+    },
+    {
+      "test_id": "tests/test_paper_a24_artifact_binding.py::TestA24ArtifactChain::test_hash_stable_without_changes",
+      "deselect_arg": "tests/test_paper_a24_artifact_binding.py::TestA24ArtifactChain::test_hash_stable_without_changes",
+      "classification": "known_flaky",
+      "failure_reason": "State-contamination: passes in isolation but fails intermittently in full suite due to test ordering",
+      "impact": "non_blocking",
+      "always_deselected": true,
+      "verified_node_id": true
+    }
+  ],
+  "removed_entries": [
+    {
+      "reason": "test_cli_list_runs.py no longer exists in the test suite",
+      "previous_test_id": "tests/test_cli_list_runs.py::test_cli_list_shows_real_run"
+    }
+  ],
+  "total_known_flaky": 2,
+  "last_updated": "2026-06-14",
+  "regression_command": "pytest tests/ -q --deselect tests/test_paper_a20_real_e2e.py::TestA20CLIAgainstRealData::test_cli_list_shows_real_run --deselect tests/test_paper_a24_artifact_binding.py::TestA24ArtifactChain::test_hash_stable_without_changes"
+}

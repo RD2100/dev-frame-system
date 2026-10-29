@@ -1,0 +1,59 @@
+id: m4-j2-terminal-governance-branch-matrix
+title: Add governance matrix assertions for rejected and plan_auditor terminal branches
+created_at: "2026-06-01T12:50:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Extend the terminal governance matrix beyond reviewer/runtime end states to
+  include rejected and plan_auditor-originated terminal branches. This keeps
+  the governance chain tests symmetrical across the main branch exits.
+
+problem_statement:
+  - "blocked, human_required, and failed now have same-run governance chain coverage."
+  - "rejected and plan_auditor blocked/human_required branches still rely on narrower tests."
+  - "We want the same matrix-style confidence for those branch exits without adding new runtime behavior."
+
+must_do:
+  - Add focused governance chain assertions for:
+    - rejected
+    - plan_audit_blocked
+    - plan_audit_human_required
+  - Reuse the terminal governance matrix style where practical.
+  - For each case, assert the relevant reporting surfaces stay coherent.
+  - Keep the slice test-only unless a real inconsistency is exposed.
+
+must_not_do:
+  - Do not add new runtime features unless tests reveal a real contradiction.
+  - Do not touch src/** by default.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_plan_auditor.py
+  - .ai/tasks/2026-06-01-m4-j2-terminal-governance-branch-matrix.yaml
+  - .ai/runs/m4-j2-terminal-governance-branch-matrix/**
+  - .ai/reports/2026-06-01-m4-j2-terminal-governance-branch-matrix-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only existing governance chain tests in test_go_dispatch.py and plan_auditor tests unless blocked.
+  - Prefer a shared helper/data-table extension over large new tests.
+
+acceptance_criteria:
+  - rejected and plan_auditor terminal branches have governance chain coverage.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_plan_auditor.py -q
+  - python -m pytest tests/ -q

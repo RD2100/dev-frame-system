@@ -1,0 +1,60 @@
+id: m4-g3-advanced-governance-cross-run-matrix
+title: Add cross-run matrix assertions for advanced governance statuses
+created_at: "2026-06-01T10:20:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Extend the M4-G2 cross-run continuity assertion from one advanced governance
+  status to a small matrix. Cover the statuses that are currently writable
+  through deterministic helpers/CLI: accepted_risk, mitigated, and obsolete.
+
+problem_statement:
+  - "M4-G2 proves cross-run continuity for accepted_risk only."
+  - "Mitigated and obsolete now exist as writable statuses, but they are not yet covered by the same cross-run run-chain assertion style."
+
+must_do:
+  - Add focused cross-run tests for accepted_risk, mitigated, and obsolete.
+  - Reuse one shared synthetic-run pattern where possible to keep the tests compact.
+  - For each status, assert:
+    - run 1 writes the advanced governance status
+    - prompt context excludes it in run 1
+    - run 2 reopens the same recurrence key
+    - prompt context includes it again in run 2
+    - final-report in run 2 shows the advanced status count drop back to 0 and open_issues increase appropriately
+    - verify_run_evidence governance summary in run 2 reflects the same state
+  - Keep this slice test-only unless the tests uncover a real inconsistency.
+
+must_not_do:
+  - Do not add new runtime features unless tests reveal a real defect.
+  - Do not touch src by default.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-g3-advanced-governance-cross-run-matrix.yaml
+  - .ai/runs/m4-g3-advanced-governance-cross-run-matrix/**
+  - .ai/reports/2026-06-01-m4-g3-advanced-governance-cross-run-matrix-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only existing governance chain tests in test_go_dispatch.py unless blocked.
+  - Prefer one parameterized/shared helper test pattern instead of three copy-paste tests when possible.
+
+acceptance_criteria:
+  - Cross-run continuity is asserted for accepted_risk, mitigated, and obsolete.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q

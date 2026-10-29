@@ -1,0 +1,61 @@
+id: m4-g1-advanced-governance-run-chain
+title: Add single-run end-to-end assertions for advanced governance statuses
+created_at: "2026-06-01T02:25:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Add a focused end-to-end test slice proving that advanced governance
+  statuses flow coherently through one run context: ledger transition, prompt
+  exclusion, final-report summary, verify_run_evidence governance summary, and
+  run_show/run_verify display.
+
+problem_statement:
+  - "We have unit coverage for helpers and CLI commands, and separate coverage for final-report and verify output."
+  - "What is still weak is a same-run chain assertion that these pieces stay aligned together for advanced statuses."
+
+must_do:
+  - Add one or more focused tests that operate on a single synthetic run directory and isolated ledger.
+  - For at least one advanced governance status, assert the same run shows consistent results across:
+    - issue transition helper or CLI write
+    - prompt context exclusion
+    - final-report Issue Ledger section
+    - verify_run_evidence governance summary
+    - run_show or run_verify CLI display
+  - Keep the slice deterministic and narrow.
+
+must_not_do:
+  - Do not add new product behavior unless the test reveals a real inconsistency.
+  - Do not change shell safety, graph routing, reviewer logic, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_issue_cli.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - .ai/tasks/2026-06-01-m4-g1-advanced-governance-run-chain.yaml
+  - .ai/runs/m4-g1-advanced-governance-run-chain/**
+  - .ai/reports/2026-06-01-m4-g1-advanced-governance-run-chain-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only the already existing governance-related tests unless blocked.
+  - Prefer adding a single focused integration-style test rather than broad suites.
+
+acceptance_criteria:
+  - There is at least one same-run end-to-end assertion for an advanced governance status.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_issue_ledger.py tests/test_issue_cli.py tests/test_reviewer_minimal_loop.py -q
+  - python -m pytest tests/ -q

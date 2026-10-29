@@ -1,0 +1,62 @@
+id: m4-k3-plan-auditor-human-required-gap
+title: Close dedicated plan_auditor human_required governance gap
+created_at: "2026-06-01T13:55:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Close the highest-priority documented governance matrix gap:
+  add a dedicated same-run governance chain assertion for the
+  plan_auditor human_required branch.
+
+problem_statement:
+  - "M4-K2 documented plan_auditor_terminal_same_run/human_required as an explicit gap."
+  - "It is indirectly covered by run-level human_required tests, but not by a dedicated plan_auditor branch test."
+
+must_do:
+  - Add a dedicated same-run governance chain assertion for plan_auditor human_required.
+  - The test must cover:
+    - plan-review / plan-issues artifacts
+    - final-report
+    - failure-analysis
+    - analyze_recovery
+    - verify_run_evidence
+    - run_show / run_verify / run_recover display
+  - Keep the slice test-only unless a real inconsistency is exposed.
+  - Update the governance matrix audit inventory so this gap is no longer listed.
+
+must_not_do:
+  - Do not add new runtime behavior unless the test reveals a contradiction.
+  - Do not touch src/** by default.
+  - Do not touch tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_plan_auditor.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - .ai/tasks/2026-06-01-m4-k3-plan-auditor-human-required-gap.yaml
+  - .ai/runs/m4-k3-plan_auditor-human_required-gap/**
+  - .ai/reports/2026-06-01-m4-k3-plan-auditor-human-required-gap-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only test_plan_auditor.py and test_governance_matrix_audit.py unless blocked.
+  - Prefer extending the existing plan_auditor governance matrix rather than creating a new harness.
+
+acceptance_criteria:
+  - plan_auditor human_required has dedicated same-run governance chain coverage.
+  - governance matrix audit no longer records that gap.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_plan_auditor.py tests/test_governance_matrix_audit.py -q
+  - python -m pytest tests/ -q

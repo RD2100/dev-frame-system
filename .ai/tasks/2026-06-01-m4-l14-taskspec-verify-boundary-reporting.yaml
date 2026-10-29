@@ -1,0 +1,60 @@
+id: m4-l14-taskspec-verify-boundary-reporting
+title: Add structured reporting for TaskSpec verify-boundary blocks
+created_at: "2026-06-01T20:12:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Make @go verify-boundary preflight failures easier to reason about by
+  emitting structured blocked details rather than only a single free-form
+  message string.
+
+problem_statement:
+  - "M4-L13 correctly blocks the confirmed verify/deny conflict before execution."
+  - "The current failure surface is still mostly one red message string."
+  - "Reviewers and orchestrators would benefit from a stable blocked reason and per-conflict details."
+
+must_do:
+  - Keep the existing preflight guard behavior and scope unchanged.
+  - Add a structured conflict detail representation for verify-boundary blocks.
+  - Emit a stable blocked reason identifier in the CLI output.
+  - Include per-conflict details such as verify command name, script path, derived candidate, and deny target.
+  - Add focused tests for the structured blocked output.
+
+must_not_do:
+  - Do not broaden the guard logic.
+  - Do not change runtime governance behavior or graph blocking semantics.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+  - Do not change the existing success path for non-conflicting dispatches.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l14-taskspec-verify-boundary-reporting.yaml
+  - .ai/runs/m4-l14-taskspec-verify-boundary-reporting/**
+  - .ai/reports/2026-06-01-m4-l14-taskspec-verify-boundary-reporting-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only cli.py preflight guard and focused go_dispatch tests unless blocked.
+  - Keep the slice to blocked reporting quality only.
+
+acceptance_criteria:
+  - The confirmed verify/deny conflict still blocks before execution.
+  - CLI output contains a stable blocked reason identifier.
+  - CLI output includes structured conflict details.
+  - Focused tests pass and non-conflicting dispatch still works.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py -q

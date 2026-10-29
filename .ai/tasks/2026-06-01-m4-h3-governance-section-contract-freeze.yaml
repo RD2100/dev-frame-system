@@ -1,0 +1,67 @@
+id: m4-h3-governance-section-contract-freeze
+title: Freeze governance section heading contract across report and recovery outputs
+created_at: "2026-06-01T11:30:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Extract the Governance Summary section heading and rendering entrypoint into
+  a shared deterministic contract so run_show, run_verify, failure-analysis,
+  and future recovery/report surfaces do not drift again.
+
+problem_statement:
+  - "Governance labels/order already come from a shared contract."
+  - "The section heading and rendering loops are still duplicated across multiple outputs."
+  - "That leaves the reporting layer vulnerable to wording drift even though the fields are aligned."
+
+must_do:
+  - Introduce a shared helper or contract for rendering governance summary lines/heading.
+  - Reuse it from:
+    - run_show
+    - run_verify
+    - failure-analysis
+    - final-report if useful
+  - Keep output text materially unchanged.
+  - Add focused tests guarding the shared heading/section rendering.
+
+must_not_do:
+  - Do not change governance counts.
+  - Do not change blocking semantics.
+  - Do not add new CLI commands.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/finalizer.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - ai-workflow-hub/tests/test_issue_ledger.py
+  - ai-workflow-hub/tests/test_reviewer_minimal_loop.py
+  - .ai/tasks/2026-06-01-m4-h3-governance-section-contract-freeze.yaml
+  - .ai/runs/m4-h3-governance-section-contract-freeze/**
+  - .ai/reports/2026-06-01-m4-h3-governance-section-contract-freeze-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+
+token_budget_guidance:
+  - Read only issue_ledger.py governance contract, cli.py governance display sections, finalizer.py failure-analysis/final-report sections, and focused tests unless blocked.
+  - Keep this slice to rendering-contract extraction only.
+
+acceptance_criteria:
+  - governance section heading/rendering comes from one shared source.
+  - run_show, run_verify, failure-analysis, and final-report still display the same content.
+  - focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_go_dispatch.py tests/test_issue_ledger.py tests/test_reviewer_minimal_loop.py -q
+  - python -m pytest tests/ -q

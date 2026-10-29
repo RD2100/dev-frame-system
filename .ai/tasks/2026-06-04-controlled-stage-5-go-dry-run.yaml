@@ -1,0 +1,50 @@
+id: controlled-stage-5-go-dry-run
+title: Controlled Stage 5 go dry-run delegation probe
+created_at: "2026-06-04T00:20:00+08:00"
+mode: "@go read"
+profile: read-only
+risk: low
+
+goal: >
+  Perform a minimal dry-run delegation probe that reads the approved Stage 4
+  route result and verifies the local review_pack_flow helper can be invoked
+  for help text. Do not edit business code or execute real-chain workflows.
+
+must_do:
+  - Read `_reports/conversation-authorization/stage-4-route-interpretation-probe-v1/ROUTE_INTERPRETATION_RESULT.json`.
+  - Run `python tools/review_pack_flow.py --help`.
+  - Write a concise dry-run summary under `.ai/runs/controlled-stage-5-go-dry-run/manual-dispatch-001/opencode-dry-run-summary.md`.
+
+must_not_do:
+  - Do not edit source code.
+  - Do not submit to GPT.
+  - Do not connect to browser or CDP.
+  - Do not run business real-chain workflows.
+  - Do not create a new GPT conversation.
+  - Do not use base URL fallback.
+  - Do not perform git operations.
+
+allow_write:
+  - .ai/tasks/2026-06-04-controlled-stage-5-go-dry-run.yaml
+  - .ai/runs/controlled-stage-5-go-dry-run/**
+  - _reports/conversation-authorization/stage-5-go-dry-run-delegation-probe-v1/**
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - tools/**
+  - ai-workflow-hub/**
+  - ai-workflow-hub-e2e/**
+  - codegraph/**
+  - _reports/conversation-authorization/stage-1*/**
+  - _reports/conversation-authorization/stage-2*/**
+  - _reports/conversation-authorization/stage-3*/**
+  - _reports/conversation-authorization/stage-4*/**
+
+acceptance_criteria:
+  - Summary file exists.
+  - Summary reports the Stage 4 route status.
+  - Summary reports `review_pack_flow.py --help` exit code.
+  - No denied paths are modified by the dry-run.

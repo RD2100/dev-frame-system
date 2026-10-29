@@ -1,0 +1,38 @@
+# UI 超时/元素查找失败归因规则
+
+rules:
+  - id: "ui-timeout"
+    pattern: ".*timeout.*|.*timed out.*"
+    source: [error_message]
+    attribution:
+      root_cause: "UI操作超时"
+      likely_module: "对应页面/组件"
+      severity: "P1"
+      suggestion: "检查网络请求、页面加载性能、等待超时时间设置"
+
+  - id: "ui-element-not-found"
+    pattern: ".*not found.*|.*不存在.*|.*找不到.*|.*not exist.*"
+    source: [error_message, stacktrace]
+    attribution:
+      root_cause: "UI元素未找到"
+      likely_module: "对应页面UI"
+      severity: "P1"
+      suggestion: "检查元素ID/文本/选择器是否因版本更新而变更，增加显式等待"
+
+  - id: "ui-element-not-clickable"
+    pattern: ".*not clickable.*|.*不可点击.*|.*not tappable.*"
+    source: [error_message]
+    attribution:
+      root_cause: "UI元素不可点击"
+      likely_module: "对应页面UI"
+      severity: "P2"
+      suggestion: "检查元素是否被遮挡、是否还在动画中、是否未加载完成"
+
+  - id: "ui-screenshot-mismatch"
+    pattern: ".*assert_exists.*|.*图像匹配失败.*|.*template mismatch.*"
+    source: [error_message]
+    attribution:
+      root_cause: "图像识别匹配失败"
+      likely_module: "对应页面UI"
+      severity: "P2"
+      suggestion: "检查UI是否有变化、更新基准截图、考虑用Poco控件代替图像识别"

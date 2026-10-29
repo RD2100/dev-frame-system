@@ -1,0 +1,59 @@
+id: m4-k2-governance-matrix-coverage-audit
+title: Add explicit governance matrix coverage audit
+created_at: "2026-06-01T13:40:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Turn the current governance matrix coverage into an explicit, executable
+  inventory so we know which statuses/branches are intentionally covered and
+  which are intentionally still out of scope.
+
+problem_statement:
+  - "We now have many governance tests, but coverage knowledge is still implicit across several files."
+  - "Without an explicit inventory, it's easy to lose track of what is already protected by matrix tests."
+
+must_do:
+  - Add a deterministic governance coverage inventory artifact in tests and/or docs under the repo.
+  - Add one focused test that asserts the expected covered cases are present.
+  - Covered set should at minimum reflect the currently implemented matrix slices:
+    - terminal same-run: blocked, human_required, failed, rejected
+    - plan_auditor terminal same-run: blocked, human_required
+    - advanced governance cross-run: accepted_risk, mitigated, obsolete
+  - If there are known deliberate gaps, record them explicitly rather than leaving them implicit.
+  - Keep the slice test/audit only; no runtime changes.
+
+must_not_do:
+  - Do not add new runtime behavior.
+  - Do not change existing governance semantics.
+  - Do not touch src/**, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-k2-governance-matrix-coverage-audit.yaml
+  - .ai/runs/m4-k2-governance-matrix-coverage-audit/**
+  - .ai/reports/2026-06-01-m4-k2-governance-matrix-coverage-audit-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/**
+
+token_budget_guidance:
+  - Read only existing governance matrix tests unless blocked.
+  - Prefer a small inventory + assertion over a broad rewrite.
+
+acceptance_criteria:
+  - There is an explicit governance matrix coverage inventory.
+  - Focused tests pass and broader tests pass.
+
+suggested_test_commands:
+  - python -m pytest tests/test_governance_matrix_audit.py tests/test_go_dispatch.py -q
+  - python -m pytest tests/ -q

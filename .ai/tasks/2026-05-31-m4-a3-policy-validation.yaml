@@ -1,0 +1,83 @@
+id: m4-a3-policy-validation
+title: Validate execution policy regex patterns and surface errors in doctor
+created_at: "2026-05-31T21:20:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: medium
+
+goal: >
+  Close the policy-validation gap left by M4-A2: malformed regex entries in
+  configs/execution-policy.yaml must not be silently ignored. The system must
+  detect them deterministically and surface them through doctor / validation
+  paths without changing shell blocking semantics for valid configs.
+
+problem_statement:
+  - "M4-A2 introduced regex: patterns for forbidden_shell_patterns."
+  - "shell_runner.is_shell_safe() currently catches re.error and skips malformed regex patterns silently."
+  - "The orchestrator review identified this as a policy-validation gap."
+  - "Doctor currently checks config file presence, but not semantic validity of execution-policy regex patterns."
+
+must_do:
+  - Add deterministic validation for execution-policy shell regex patterns.
+  - Validation must detect malformed regex entries under forbidden_shell_patterns.
+  - Expose validation through a reusable helper, not ad hoc inline logic only.
+  - Surface invalid execution-policy regex patterns in doctor output.
+  - In doctor strict mode, invalid execution-policy regex patterns must make the command fail non-zero.
+  - Keep valid regex patterns working exactly as in M4-A2.
+  - Add focused tests for policy validation and doctor behavior.
+  - Keep changes minimal and local to config loading / doctor / shell policy files and tests.
+
+must_not_do:
+  - Do not change shell blocking semantics for valid patterns.
+  - Do not change Issue Contract v0.
+  - Do not change Ledger merge semantics.
+  - Do not change finalizer blocking rules.
+  - Do not change P0 wontfix / human_override semantics.
+  - Do not edit ai-workflow-hub/tasks.yaml.
+  - Do not edit ai-workflow-hub-e2e files.
+  - Do not implement plan_auditor, issues CLI, or final-report ledger sections.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/config_loader.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/tests/test_shell_runner.py
+  - ai-workflow-hub/tests/test_doctor_policy.py
+  - .ai/tasks/2026-05-31-m4-a3-policy-validation.yaml
+  - .ai/runs/m4-a3-policy-validation/**
+  - .ai/reports/2026-05-31-m4-a3-policy-validation-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/issue_ledger.py
+  - ai-workflow-hub/src/ai_workflow_hub/nodes/reviewer.py
+  - ai-workflow-hub/configs/execution-policy.yaml
+
+token_budget_guidance:
+  - Read only config_loader.py, cli.py doctor section, shell_runner.py, and directly relevant tests unless blocked.
+  - Prefer one focused new test module for doctor/policy validation.
+  - Do not re-audit unrelated M4 files.
+  - Summarize evidence paths instead of copying long logs.
+
+acceptance_criteria:
+  - A malformed regex policy entry is detected deterministically by validation code.
+  - aihub doctor reports invalid execution-policy regex patterns as a failed check.
+  - aihub doctor --strict exits non-zero when invalid execution-policy regex patterns are present.
+  - Valid regex patterns continue to behave exactly as before.
+  - Focused tests pass, broader tests pass, and evidence artifacts are written.
+
+suggested_test_commands:
+  - python -m pytest tests/test_shell_runner.py tests/test_doctor_policy.py -q
+  - python -m pytest tests/ -q
+  - python -m ai_workflow_hub.cli doctor --strict
+
+reviewer_focus:
+  - Check that policy validation does not weaken or broaden shell blocking for valid configs.
+  - Check that doctor strict mode now actually gates on policy validity rather than only printing failures.
+  - Check that no unrelated governance semantics changed.

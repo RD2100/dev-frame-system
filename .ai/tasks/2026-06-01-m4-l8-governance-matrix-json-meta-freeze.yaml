@@ -1,0 +1,64 @@
+id: m4-l8-governance-matrix-json-meta-freeze
+title: Freeze governance matrix JSON _meta contract
+created_at: "2026-06-01T18:12:00+08:00"
+mode: "@go"
+profile: ai-dev
+risk: low
+
+goal: >
+  Freeze the governance matrix JSON `_meta` contract so machine consumers can
+  rely on stable key ordering and explicit expected values, not just field
+  presence.
+
+problem_statement:
+  - "The governance matrix JSON export now has `_meta`."
+  - "That `_meta` contract is validated for presence and value equality, but its own key order and explicit expected contract are not separately frozen."
+  - "Future edits could keep the same fields while subtly drifting the machine-facing `_meta` shape."
+
+must_do:
+  - Add an explicit shared `_meta` shape/order contract.
+  - Freeze `_meta` key order explicitly.
+  - Freeze `_meta` allowed/expected values explicitly.
+  - Add focused tests that fail on `_meta` shape or value drift.
+  - Include a real-path verification command for `--format json`.
+
+must_not_do:
+  - Do not change runtime governance behavior.
+  - Do not change blocking semantics.
+  - Do not change existing non-`_meta` data or panel/markdown outputs.
+  - Do not reorder existing top-level JSON keys.
+  - Do not touch coding_graph.py, shell_runner.py, tasks.yaml, ai-workflow-hub-e2e, or smoke_report.txt.
+
+allow_write:
+  - ai-workflow-hub/src/ai_workflow_hub/governance_matrix.py
+  - ai-workflow-hub/tests/test_governance_matrix_audit.py
+  - ai-workflow-hub/tests/test_go_dispatch.py
+  - .ai/tasks/2026-06-01-m4-l8-governance-matrix-json-meta-freeze.yaml
+  - .ai/runs/m4-l8-governance-matrix-json-meta-freeze/**
+  - .ai/reports/2026-06-01-m4-l8-governance-matrix-json-meta-freeze-result.md
+
+deny_write:
+  - .git/**
+  - "**/.env"
+  - "**/*secret*"
+  - "**/*key*"
+  - ai-workflow-hub/tasks.yaml
+  - ai-workflow-hub-e2e/**
+  - smoke_report.txt
+  - ai-workflow-hub/src/ai_workflow_hub/shell_runner.py
+  - ai-workflow-hub/src/ai_workflow_hub/workflows/coding_graph.py
+  - ai-workflow-hub/src/ai_workflow_hub/cli.py
+
+token_budget_guidance:
+  - Read only governance_matrix.py and focused governance export tests unless blocked.
+  - Keep the slice to `_meta` contract freeze plus regression coverage only.
+
+acceptance_criteria:
+  - Governance matrix exposes an explicit `_meta` order/value contract.
+  - JSON export preserves the current `_meta` keys and values using that contract.
+  - Focused tests fail if `_meta` order or values drift.
+  - Real-path `--format json` still succeeds.
+
+suggested_test_commands:
+  - python -m pytest tests/test_governance_matrix_audit.py tests/test_go_dispatch.py -q
+  - python -m ai_workflow_hub.cli governance matrix --format json

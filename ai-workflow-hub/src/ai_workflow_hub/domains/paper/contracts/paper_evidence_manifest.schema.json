@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PaperEvidenceManifest",
+  "type": "object",
+  "required": ["manifest_id", "task_id", "status", "files", "privacy_attestation"],
+  "properties": {
+    "manifest_id": {"type": "string"},
+    "task_id": {"type": "string"},
+    "status": {"type": "string", "enum": ["complete", "partial", "failed"]},
+    "files": {"type": "array", "items": {"type": "object", "properties": {"filename": {"type": "string"}, "sha256": {"type": "string"}, "size_bytes": {"type": "integer"}, "content_type": {"type": "string"}}}},
+    "privacy_attestation": {"type": "object", "required": ["no_full_text", "no_api_keys", "no_personal_identity"], "properties": {"no_full_text": {"type": "boolean"}, "no_api_keys": {"type": "boolean"}, "no_personal_identity": {"type": "boolean"}}},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}
