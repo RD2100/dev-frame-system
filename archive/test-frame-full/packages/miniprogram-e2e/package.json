@@ -1,0 +1,18 @@
+{
+  "name": "@testframe/miniprogram-e2e",
+  "version": "1.0.0",
+  "description": "微信小程序E2E自动化测试通用框架 — miniprogram-automator + Jest",
+  "main": "index.js",
+  "scripts": {
+    "scan": "node scan.js"
+  },
+  "dependencies": {
+    "miniprogram-automator": "^1.0.0",
+    "pixelmatch": "^6.0.0",
+    "pngjs": "^7.0.0"
+  },
+  "peerDependencies": {
+    "jest": ">=29.0.0"
+  },
+  "keywords": ["wechat", "miniprogram", "e2e", "automator", "test"]
+}

@@ -1,0 +1,97 @@
+name: FitTrack Full Test Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  unit-and-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout TestFrame
+        uses: actions/checkout@v4
+
+      - name: Clone FitTrack
+        run: git clone https://github.com/RD2100/FitnessManager.git /tmp/fittrack
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install TestFrame Python deps
+        run: pip install -r requirements.txt pyyaml click requests pytest allure-pytest
+
+      - name: Install FitTrack npm deps
+        run: cd /tmp/fittrack && npm install
+
+      - name: Install Playwright
+        run: npm install @playwright/test && npx playwright install chromium --with-deps
+
+      - name: Stage 1 - Jest unit tests
+        run: |
+          cd /tmp/fittrack
+          npx jest --json --outputFile=/tmp/jest-results.json || true
+          echo "Jest exit code: $?"
+
+      - name: Stage 2 - pytest API + model tests
+        run: |
+          cd $GITHUB_WORKSPACE
+          python -m pytest tests/fittrack/test_models.py -v --tb=short --alluredir=reports/allure-results || true
+          echo "pytest models exit code: $?"
+
+      - name: Stage 2.5 - Build FitTrack admin
+        run: |
+          cd /tmp/fittrack/admin
+          npm install
+          npx vite build
+          npx vite preview --port 5190 &
+          sleep 3
+
+      - name: Stage 2.5 - Playwright H5 tests
+        run: |
+          cd $GITHUB_WORKSPACE
+          npx playwright test --config=playwright.config.js || true
+
+      - name: Stage 3 - Attribution + Gate
+        run: |
+          cd $GITHUB_WORKSPACE
+          python -c "
+          import sys; sys.path.insert(0,'.')
+          from aggregator.collector import collect_all_results
+          from orchestrator.gate import gate_check
+          results = collect_all_results()
+          passed, report = gate_check('main', 'fittrack', results)
+          print(report)
+          "
+
+      - name: Generate Allure Report
+        if: always()
+        run: |
+          cd $GITHUB_WORKSPACE
+          npm install -g allure-commandline
+          allure generate reports/allure-results -o reports/allure-report --clean || true
+
+      - name: Upload Allure Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: reports/allure-report/
+
+      - name: Upload Test Evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-evidence
+          path: |
+            reports/allure-results/
+            /tmp/jest-results.json

@@ -1,0 +1,9 @@
+# Sentry 配置
+sentry:
+  dsn: "${SENTRY_DSN}"
+  org: ""
+  project: ""
+  auth_token: "${SENTRY_AUTH_TOKEN}"
+  base_url: "https://sentry.io"
+  environment: "staging"
+  traces_sample_rate: 1.0

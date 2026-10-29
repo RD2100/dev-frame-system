@@ -1,0 +1,56 @@
+# API 错误归因规则
+
+rules:
+  - id: "api-500"
+    pattern: "500|Internal Server Error"
+    source: [error_message]
+    attribution:
+      root_cause: "服务端5xx错误"
+      likely_module: "后端服务"
+      severity: "P0"
+      suggestion: "检查服务端日志，排查数据库连接、未捕获异常"
+
+  - id: "api-401"
+    pattern: "401|Unauthorized|未授权"
+    source: [error_message]
+    attribution:
+      root_cause: "认证失败(Token过期/无效)"
+      likely_module: "认证模块"
+      severity: "P1"
+      suggestion: "检查Token刷新逻辑、登录状态维护"
+
+  - id: "api-403"
+    pattern: "403|Forbidden|无权限"
+    source: [error_message]
+    attribution:
+      root_cause: "权限不足"
+      likely_module: "权限校验模块"
+      severity: "P1"
+      suggestion: "检查用户角色权限配置"
+
+  - id: "api-404"
+    pattern: "404|Not Found|未找到"
+    source: [error_message]
+    attribution:
+      root_cause: "接口/资源不存在"
+      likely_module: "路由配置或数据层"
+      severity: "P2"
+      suggestion: "检查API路径、资源ID有效性"
+
+  - id: "api-timeout"
+    pattern: "timeout|超时|timed out"
+    source: [error_message]
+    attribution:
+      root_cause: "接口超时"
+      likely_module: "后端服务或网络"
+      severity: "P1"
+      suggestion: "检查后端响应时间、数据库慢查询、外部依赖超时"
+
+  - id: "api-connection-refused"
+    pattern: "Connection refused|连接被拒绝"
+    source: [error_message]
+    attribution:
+      root_cause: "服务不可达"
+      likely_module: "服务部署/网络"
+      severity: "P0"
+      suggestion: "检查目标服务是否启动、端口是否正确、防火墙规则"

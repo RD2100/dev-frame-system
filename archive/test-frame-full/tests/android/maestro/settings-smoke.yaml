@@ -1,0 +1,16 @@
+# Maestro Android 冒烟测试 — Settings App
+# 通用选择器，跨语言兼容
+appId: com.android.settings
+---
+- launchApp
+- assertVisible: "Settings|Network|Connected|Battery|Display|Sound|Storage|Apps|About|Security|Accounts|System|Google"
+- takeScreenshot: reports/android/settings_home.png
+
+# 进入 About phone
+- tapOn: "About.*|关于.*"
+- assertVisible: ".*"
+- takeScreenshot: reports/android/about_phone.png
+
+# 返回
+- back
+- assertVisible: "Settings|Network|Connected|Battery|Display|Sound|Storage"

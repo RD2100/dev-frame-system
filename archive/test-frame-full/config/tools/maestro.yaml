@@ -1,0 +1,7 @@
+# Maestro 配置
+maestro:
+  format: "junit"
+  output_dir: "reports/maestro/"
+  timeout: 120
+  env:
+    APP_ID: ""
