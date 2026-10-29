@@ -1,0 +1,39 @@
+task_id: t-playwright-bridge-live-integration
+task_type: execution_closure
+review_stage: execution
+REVIEW_RUN_ID: t-playwright-bridge-live-v1-20260606
+
+description: >
+  将 control_plane/live_handoff_transfer.py 中的 live CDP 文件附件传输逻辑
+  整合进 control_plane/playwright_bridge.py 的 submit_via_bridge LIVE 分支，
+  替换当前占位符 "Live CDP submission not yet implemented (G7 pilot)"。
+  同时更新 CLI transfer 命令支持真实 live 传输。
+
+scope:
+  allow:
+    - 修改 playwright_bridge.py submit_via_bridge LIVE 分支
+    - 更新 cli.py transfer 子命令支持 --live 模式
+    - 新增 playwright_bridge 的测试
+    - 重构 live_handoff_transfer.py 为可导入模块
+  prohibit:
+    - 不得修改 guard 逻辑
+    - 不得删除 evidence
+    - 不得默认开启 live CDP
+    - 不得处理真实用户数据
+    - 不得导出 cookie/session/browser profile
+
+acceptance_criteria:
+  - playwright_bridge.submit_via_bridge 在 LIVE 模式下能连接 CDP 并传输文件
+  - CLI: devframe handoff transfer --to <url> --live 执行真实传输
+  - CLI: devframe handoff transfer --to <url> 仍为 dry-run（默认行为不变）
+  - 所有既有测试通过
+  - safety_flag 机制保留不变（live 需要显式 safety_flag=True）
+  - test_playwright_bridge.py 新增 live transfer 的结构性测试
+
+files:
+  modify:
+    - control_plane/playwright_bridge.py
+    - control_plane/cli.py
+    - control_plane/live_handoff_transfer.py (refactor to module)
+  add:
+    - tests/test_playwright_bridge.py (update existing)

@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ContextHandoff",
+  "description": "DevFrame Control Plane context handoff schema",
+  "type": "object",
+  "required": ["project_id", "project_name", "current_stage", "next_stage", "safety_boundaries", "expected_response_schema", "failure_policy"],
+  "properties": {
+    "project_id": {"type": "string"},
+    "project_name": {"type": "string"},
+    "current_stage": {"type": "string"},
+    "next_stage": {"type": "string"},
+    "accepted_phases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "phase": {"type": "string"},
+          "status": {"type": "string", "enum": ["accepted", "accepted_with_evidence_limitation", "blocked", "pending"]}
+        }
+      }
+    },
+    "known_limitations": {"type": "array", "items": {"type": "string"}},
+    "safety_boundaries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string"}
+    },
+    "allowed_actions": {"type": "array", "items": {"type": "string"}},
+    "prohibited_actions": {"type": "array", "items": {"type": "string"}},
+    "expected_response_schema": {
+      "type": "object",
+      "required": ["overall_judgment", "handoff_understood"],
+      "properties": {
+        "overall_judgment": {"type": "string", "enum": ["accepted", "blocked", "review_unverified"]},
+        "handoff_understood": {"type": "string", "enum": ["yes", "no"]},
+        "current_status_understood": {"type": "string", "enum": ["yes", "no"]},
+        "safety_boundaries_understood": {"type": "string", "enum": ["yes", "no"]},
+        "next_stage_understood": {"type": "string", "enum": ["yes", "no"]},
+        "ready_for_next_authorization": {"type": "string", "enum": ["yes", "no"]},
+        "rationale": {"type": "string"}
+      }
+    },
+    "failure_policy": {
+      "type": "object",
+      "properties": {
+        "on_handoff_not_understood": {"type": "string", "default": "blocked"},
+        "on_safety_not_understood": {"type": "string", "default": "review_unverified"},
+        "on_schema_mismatch": {"type": "string", "default": "review_unverified"}
+      }
+    }
+  }
+}

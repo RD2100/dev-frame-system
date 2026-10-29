@@ -1,0 +1,33 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: devframe-control-plane
+
+      - name: Clone agent-acceptance (cross-repo dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: RD2100/agent-acceptance
+          path: agent-acceptance
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          cd devframe-control-plane
+          pip install pytest pyyaml
+          cd ../agent-acceptance
+          pip install pytest pyyaml || true
+
+      - name: Run tests
+        run: |
+          cd devframe-control-plane
+          python -m pytest tests/ -v --tb=short

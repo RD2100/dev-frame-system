@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EvidenceSpec",
+  "description": "DevFrame Control Plane evidence specification schema",
+  "type": "object",
+  "required": ["evidence_spec_version"],
+  "properties": {
+    "evidence_spec_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "global_required_files": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Files required in every evidence pack",
+      "default": [
+        "PACK_MANIFEST.md",
+        "PACK_MANIFEST_VERIFY.md",
+        "VALIDATION_RESULT.json",
+        "BLOCKED_ITEMS_STATUS.json"
+      ]
+    },
+    "authorization_evidence": {
+      "type": "object",
+      "properties": {
+        "required_files": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [
+            "GPT_REVIEW_PROMPT.md",
+            "POST_REVIEW_ROUTE.json",
+            "SAFETY_CHECK.md"
+          ]
+        }
+      }
+    },
+    "execution_closure_evidence": {
+      "type": "object",
+      "properties": {
+        "required_files": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [
+            "UNIFIED_DIFF.patch",
+            "COMMAND_LOG.md",
+            "TEST_OUTPUT.txt",
+            "DECISION_LEDGER_APPEND.jsonl"
+          ]
+        }
+      }
+    },
+    "hash_exclusions": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Files excluded from SHA256 verification (self-referential artifacts)",
+      "default": [
+        "PACK_MANIFEST.md",
+        "PACK_MANIFEST_VERIFY.md",
+        "VALIDATION_RESULT.json"
+      ]
+    },
+    "per_stage_overrides": {
+      "type": "object",
+      "description": "Stage-specific evidence overrides"
+    }
+  }
+}

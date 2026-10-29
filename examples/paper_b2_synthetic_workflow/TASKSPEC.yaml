@@ -1,0 +1,44 @@
+task_id: PAPER-B2
+task_name: synthetic paper end-to-end pipeline v2
+primary_repo: devframe-control-plane
+submission_target:
+  primary_repo: devframe-control-plane
+  allowed_paths:
+    - examples/paper_b2_synthetic_workflow/
+    - tests/test_paper_b2_synthetic_workflow.py
+    - PROJECT_HISTORY.md
+  forbidden_paths:
+    - agent-acceptance/
+    - real_user_papers/
+    - private_user_text/
+    - user_uploaded_papers/
+    - raw_paper_text/
+    - external_upload/
+    - browser_profile/
+    - cookies/
+    - sessions/
+objective: >
+  Demonstrate a validator-backed synthetic-only paper workflow v2 using real
+  devframe-control-plane pipeline stage paths. The positive case must pass
+  after PAPER-A3 validator validation. The negative case must fail closed
+  through the same validator-backed path.
+safety:
+  synthetic_only: true
+  real_user_paper_processed: false
+  contains_real_paper_full_text: false
+  contains_user_private_text: false
+  contains_raw_transcript: false
+  contains_external_upload: false
+  live_cdp_used: false
+  memory_write_contains_paper_content: false
+positive_case:
+  name: valid synthetic CSSCI workflow
+  expected_result: pre_submission_check completed
+  required_validator_artifacts:
+    - PAPER_TASK_VALIDATION.directory.json
+    - PAPER_TASK_VALIDATION.zip.json
+negative_case:
+  name: missing REDACTION_REPORT in evidence ZIP
+  expected_result: pre_submission_check failed
+  expected_blocking_issue: paper_task_evidence_pack_paper_task_validator_failed
+completion_status: ready_for_review_only_until_gpt_accepted
